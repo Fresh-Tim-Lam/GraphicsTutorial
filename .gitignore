@@ -1,0 +1,38 @@
+# ---------- 个人参考大文件（非交付物，不入库） ----------
+/docs/ppt/
+
+# ---------- 生成物 / 临时物（一律不提交） ----------
+# 构建产物
+build/
+out/
+*.o
+*.obj
+*.lib
+*.dll
+*.exe
+*.pdb
+*.ilk
+
+# ---------- 全仓唯一临时区 / 日志区 ----------
+artifacts/*
+logs/*
+!artifacts/README.md
+!logs/README.md
+
+# ---------- 根级兜底模式（临时调试文件禁止落到仓库根） ----------
+/tmp-*.cpp
+/diag-*.txt
+/shot-*.png
+/debug-*.log
+
+# ---------- 编辑器 / 系统 ----------
+.vscode/
+.idea/
+.vs/
+*.user
+Thumbs.db
+Desktop.ini
+
+# ---------- Python / 其他杂项 ----------
+__pycache__/
+*.pyc
