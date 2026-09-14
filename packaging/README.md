@@ -24,4 +24,11 @@ packaging/release/
 ## 约定
 
 - 版本号只出自 src/ 唯一事实源（version.hpp），打包脚本读取之，不硬编码。
-- 打包前必须通过测试；发布动作属于 AGENT.md 的 Ask First 项。
+- **打包前必须通过测试**；**打包后必须做一次"只用发布产物"的消费者验证**：只用 `release/include` + `release/lib` 导入库编译链接一个最小程序，并把 `release/bin` 的 dll 放到 exe 旁运行（不借助 `src/` 与 `build/`），以证明发布包对调用方自洽可用。
+- 发布动作属于 AGENT.md 的 Ask First 项。
+
+## 发布记录
+
+| 版本 | 日期 | 内容 | 验证 |
+|------|------|------|------|
+| 0.1.0 | 2026-09-14 | 像素层（Canvas/Window/Color）+ gfx_math（Mat/Vec/变换链/批量）+ 几何层（Point/PointBatch）+ 光栅化（画线、扫描线填充）+ 自写 PNG 编码 | 主仓库 `ctest` 8/8；消费者程序（仅用发布包）编译链接并运行通过，其输出 PNG 用独立解码器（Python zlib + CRC）逐块校验通过 |

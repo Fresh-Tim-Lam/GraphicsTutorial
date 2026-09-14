@@ -14,6 +14,7 @@
 - [x] 变换矩阵辅助（transform.hpp）：transform2d/transform3d 的平移、缩放、旋转（含任意轴）、翻转；test_transform 通过，教学 demo 改用它。
 - [x] ADR-0004 变换链机制：`math::Transform<N>`（记录/折叠/apply）+ `gfx::Point2D/Point3D`、`PointBatch2D/PointBatch3D`（点 apply 变换、视图零拷贝含步长）；test_chain、test_point 通过。
 - [x] **画线/图元绘制 + 扫描线多边形填充**（作业 1）：`gfx::drawLine`（Bresenham）+ `ScanlineFiller`/`fillPolygon`（边表 ET + 活性边表 AET、半开区间规则）+ 自写 `savePng`；教学主题 [tutorials/polygon-scan/](tutorials/polygon-scan/README.md) 与程序 `PolygonFill`（文本/交互输入、窗口扫描线动画、PNG 输出）；test_raster、test_png 通过（ADR-0005）。
+- [x] 逐项文件组织自检 & 首次正式 commit + 发布：提交 `3ec62e0`、tag `v0.1.0`；发布包 `packaging/release/`（include + 导入库 + DLL）已用"只用发布产物"的消费者程序编译链接并运行验证；仓库已推送至 GitHub（公开）。
 
 ## 待办
 
@@ -22,4 +23,4 @@
 - [ ] **多轮廓/带孔多边形填充**（奇偶规则 vs 非零绕组规则）与边界抗锯齿（覆盖率着色，需 Canvas 支持 alpha 写入）——ADR-0005 待细化（作业 1 提高题）。
 - [ ] **窗口输入细化**：按键/窗口尺寸变化事件；present 与 resize 处理（当前固定客户区）。
 - [ ] 教学树"鼠标交互/动画帧循环"主题（若需要）。
-- [ ] 逐项文件组织自检 & 首次正式 commit（改动入 git 前）。
+- [ ] （可选）CI：GitHub Actions 跑 `cmake --build` + `ctest`，保证远端每次改动可验证。
