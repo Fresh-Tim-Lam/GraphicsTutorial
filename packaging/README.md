@@ -10,15 +10,16 @@
 
 打包发布的**唯一入口**是 [build_release.cmd](build_release.cmd)；产出目录为 `packaging/release/`（gitignore）。
 
-## 产出形态（待首个模块细化）
+## 产出形态（首个模块 0.1.0 已落地）
 
 ```
 packaging/release/
-├─ include/gfx/    # 公共头文件
-├─ lib/            # 导入库 (.lib)
-├─ bin/            # 动态库 (.dll)
-└─ (可选) examples/  # 随包示例
+├─ include/gfx/        # 公共头文件（含 gfx/math/ 头文件子库）
+├─ lib/                # 导入库（MinGW: libgfx.dll.a；MSVC: gfx.lib）
+└─ bin/                # 动态库（MinGW: libgfx.dll；MSVC: gfx.dll）
 ```
+
+> 调用方：include 指向 `release/include`，链接 `release/lib` 导入库，运行时把 `release/bin` 下的 dll 放到 exe 旁或加入 PATH。
 
 ## 约定
 

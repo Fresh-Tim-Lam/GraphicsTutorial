@@ -13,6 +13,7 @@
 | [src/](../../src/README.md) | gfx 渲染 API 权威实现（头文件 include/gfx、实现、CMake 库目标） |
 | [tutorials/](../../tutorials/README.md) | 树状教学文档 + 每主题可运行演示（md + code，非瀑布编号章节） |
 | [tests/](../../tests/README.md) | 正式测试 |
+| [benchmarks/](../../benchmarks/README.md) | 正式性能基准（可复现；性能结论的唯一依据，见 [performance.md](performance.md)） |
 | [docs/](../../docs/README.md) | 规范文档中心（子目录职责见 docs-management） |
 | [scripts/](../../scripts/README.md) | 正式可复用的开发者工具 |
 | [resources/](../../resources/README.md) | 随项目分发静态资源 |
@@ -30,10 +31,11 @@
 - **禁止**出现在：仓库根、`src/`、`tutorials/`（正式内容树）、`docs/` 正文目录。
 - `.gitignore` 已有根级兜底模式（`/tmp-*.cpp`、`/diag-*.txt`、`/shot-*.png`、`/debug-*.log`）。
 - 开发调试日志 → `logs/`（gitignore），命名见 [logging.md](logging.md)。
+- **升级路径**：`artifacts/` 里的一次性脚本一旦成为正式产物（测试用例、基准、可复用工具），必须移入 `tests/` / `benchmarks/` / `scripts/`；性能结论的依据**必须**在 `benchmarks/`（见 [performance.md](performance.md)）。
 
 ## 文件落位决策
 
-教学/说明 → `tutorials/`（树状主题）；契约规则 → conventions；how-to → guides；理解系统 → reference；设计决策 → design；会话 → sessions。docs 内精确映射见 docs-management。
+教学/说明 → `tutorials/`（树状主题）；契约规则 → conventions；how-to → guides；理解系统/外部参考 → refs；设计决策 → design；会话 → sessions。docs 内精确映射见 docs-management。
 
 ## 任务收尾自检清单（Definition of Done）
 

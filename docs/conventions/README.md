@@ -16,3 +16,5 @@
 | [version.md](version.md) | 版本唯一事实源 | 涉及版本号/发布时 |
 | [logging.md](logging.md) | 日志规范 | 涉及日志时 |
 | [naming.md](naming.md) | 命名与语言习惯 | 命名文件/符号/提交时 |
+| [api-docs.md](api-docs.md) | 公共接口说明文档的维护规范（Doxygen 注释/变更同步） | 增改 gfx / gfx_math 公共接口或其说明时 |
+| [performance.md](performance.md) | 性能敏感写法（[矩阵构造] 只构造一次/公式单源）与性能结论记录方式（基准+测量条件） | 改热路径（变换构造、逐点/逐像素循环、批处理）或给出"更快"结论时 |

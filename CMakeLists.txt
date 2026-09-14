@@ -18,3 +18,6 @@ add_subdirectory(src)
 # 测试（随 tests/ 演进后启用）
 enable_testing()
 add_subdirectory(tests)
+
+# 教学演示（教程 code，随教学树登记）
+add_subdirectory(tutorials)

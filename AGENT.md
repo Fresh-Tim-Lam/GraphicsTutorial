@@ -24,8 +24,9 @@ Agent 职责：
 | 构建 | CMake（≥ 3.16），MSVC / clang-cl 兼容 |
 | 图形依赖 | 无第三方图形库；仅 Windows 最基础屏幕像素着色（从 0 造轮子） |
 | 交付形态 | 动态库（DLL + 导入库）+ 头文件，命名空间 `gfx` |
-| 打包发布 | packaging/ 唯一入口 `build_release.cmd` |
-| 测试 | 单测框架待模块落地后选定（tests/README.md） |
+| gfx_math | 独立头文件子库（INTERFACE，零依赖），命名空间 `gfx::math`，vec2/3/4 + mat2/3/4 |
+| 打包发布 | packaging/ 唯一入口 `build_release.cmd` → packaging/release/ |
+| 测试 | 自写轻量断言（tests/gfx_test.hpp，零第三方依赖） |
 
 ## 3. Commands（常用命令）
 
@@ -36,6 +37,7 @@ Agent 职责：
 | 运行示例 | 见 tutorials/ 对应主题 code 目录说明 |
 | 测试 | `ctest --test-dir build -C Release` |
 | 打包发布 API | `packaging\build_release.cmd` |
+| 一键脚本（免手敲） | `scripts\build-and-test.cmd`（配置+构建+测试）、`scripts\run-polygon-fill.cmd`（跑多边形填充演示）、`scripts\package-homework1.cmd`（组装作业 1 提交包）—— 详见 [scripts/README.md](scripts/README.md) |
 
 > 详源：`docs/guides/operations.md`；此处只列常用项，两处冲突以 operations.md 为准。
 
@@ -46,7 +48,8 @@ Agent 职责：
 | [src/](src/README.md) | `gfx` API 权威实现，随模块演进（头文件 + 实现） |
 | [tutorials/](tutorials/README.md) | **树状教学**：主题目录含 `.md` 讲解 + `code/` 可运行示例（非瀑布编号章节） |
 | [tests/](tests/README.md) | 单元 / 集成测试 |
-| [docs/](docs/README.md) | 规范文档中心（conventions / guides / reference / design / sessions …） |
+| [benchmarks/](benchmarks/README.md) | 正式性能基准（可复现，性能结论的依据） |
+| [docs/](docs/README.md) | 规范文档中心（conventions / guides / refs / design / sessions …） |
 | [scripts/](scripts/README.md) | 可复用开发者工具（正式，不留临时脚本） |
 | [resources/](resources/README.md) | 随项目分发的静态资源（图标/文案/示例/截图） |
 | [packaging/](packaging/README.md) | 打包发布配置与脚本，唯一入口 `build_release.cmd` |
@@ -65,6 +68,8 @@ Agent 职责：
 | 涉及版本号 | [version.md](docs/conventions/version.md) |
 | 涉及日志 | [logging.md](docs/conventions/logging.md) |
 | 文件/符号命名、语言习惯 | [naming.md](docs/conventions/naming.md) |
+| 增改 gfx / gfx_math 公共接口或其说明 | [api-docs.md](docs/conventions/api-docs.md) |
+| 改热路径（变换构造、逐点/逐像素循环、批处理）或给出性能结论 | [performance.md](docs/conventions/performance.md) |
 | 与人协作、提问边界 | [collaboration.md](docs/guides/collaboration.md) |
 
 ## 6. Boundaries（协作边界）
@@ -72,7 +77,7 @@ Agent 职责：
 ### Always（必须主动做）
 - 新增/移动/删除文档或目录后，**同步父目录 README 索引**；新增 docs 子目录登记到 docs-management 登记表。
 - 生成物（gitignore 掉的可再生物）过期时**重新生成**，不手改、不提交。
-- 模块演进后：更新 src/ 实现的同时，维护或新增 tutorials/ 树中对应教学节点与 `docs/reference/architecture.md` 数据流描述。
+- 模块演进后：更新 src/ 实现的同时，维护或新增 tutorials/ 树中对应教学节点与 `docs/refs/architecture.md` 数据流描述。
 - 任务收尾做**文件组织自检**：文件落位正确、根目录无兜底模式产物、索引已同步。
 
 ### Ask First（先问用户）
@@ -91,7 +96,7 @@ Agent 职责：
 - 教学树是**树状组织**而非"第 1 章…第 N 章"瀑布编号——新增内容按主题挂树，不按数字续章节。
 - "从 0 造轮子" = 不用现成图形库；示例/教学里出现 OpenGL/DirectX 等 API 属越界，需先问。
 - tutorials/ 教学节点的 code/ 与 src/ 权威实现的关系：**src/ 是唯一事实源**；教学 code 为演示/练习用途（其对应权威实现归属 src/）。详见 tutorials/README.md。
-- docs/ 根只允许 `README.md` + `to-dolist.md`，新文档按决策表落位。
+- docs/ 根只允许 `README.md` + `todo.md`，新文档按决策表落位。
 
 ## 8. References（参考链接）
 
@@ -99,4 +104,4 @@ Agent 职责：
 - [src/README.md](src/README.md) — src 内部约定
 - [tutorials/README.md](tutorials/README.md) — 教学树约定
 - [docs/guides/operations.md](docs/guides/operations.md) — 操作手册（构建/测试/打包）
-- [docs/reference/architecture.md](docs/reference/architecture.md) — 架构与数据流
+- [docs/refs/architecture.md](docs/refs/architecture.md) — 架构与数据流

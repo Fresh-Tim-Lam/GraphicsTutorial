@@ -8,8 +8,9 @@
 *.h text
 *.cmake text
 CMakeLists.txt text
-*.cmd text
-*.bat text
+# 批处理脚本必须保持 CRLF：LF 会让 cmd.exe 解析错乱（脚本内用 chcp 65001 输出中文）
+*.cmd text eol=crlf
+*.bat text eol=crlf
 *.gitignore text
 *.json text
 *.yml text

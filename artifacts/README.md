@@ -11,3 +11,4 @@
 - 本目录整体被 .gitignore 忽略，`README.md` 为保留文件。
 - 一次性脚本、诊断输出、截图、复现用例 → 放这里；**禁止**出现在仓库根、src/、scripts/、packaging/、docs/ 正文目录。
 - 产物过期自行清理；正式化后移入正式目录（scripts/、tests/、tutorials/ 等）。
+- **成为结论依据的基准必须移入 [benchmarks/](../benchmarks/README.md)**（性能结论只认那里的基准，见 [performance.md](../docs/conventions/performance.md)）。

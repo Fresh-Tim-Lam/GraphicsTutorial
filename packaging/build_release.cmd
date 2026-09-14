@@ -1,17 +1,52 @@
 @echo off
 rem ===========================================================================
-rem GraphicsTutorial 打包发布唯一入口 build_release.cmd
-rem 用途：构建 Release 态 gfx 动态库，并产出 packaging/release/ 分发目录。
-rem 目标读者：执行发布的维护者 / AI Agent（发布前请先确认 Ask First 边界）。
-rem 关联：packaging/README.md、docs/conventions/version.md。
-rem 状态：骨架，随首个模块落地细化；当前不含具体构建细节，仅占位+报错引导。
+rem GraphicsTutorial single packaging entry: build_release.cmd
+rem Purpose: build Release gfx library, produce packaging/release/ for consumers.
+rem Audience: release maintainers / AI Agent (Ask First boundary applies).
+rem See: packaging/README.md, docs/conventions/version.md, docs/guides/operations.md
+rem Status: active (2026-09-09). Handles MinGW naming (libgfx.dll / libgfx.dll.a).
 rem ===========================================================================
-setlocal
+setlocal enabledelayedexpansion
 
-echo [packaging] 打包发布入口已就位。
-echo [packaging] 提示：本脚本为骨架——首个 gfx 模块（src/CMakeLists.txt 中 add_library(gfx ...)）落地后，
-echo [packaging] 在此补充：cmake --build Release → 拷贝 dll/lib/include 至 packaging/release/。
+set "ROOT=%~dp0.."
+set "BUILD_DIR=%ROOT%\build"
+set "REL_DIR=%~dp0release"
+set "SRC_INC=%ROOT%\src\include"
 
-rem 占位失败分支：防止误以为已可发布
-echo [packaging] 错误：尚无发布产物可打包（首个模块未落地）。请先完成首个模块再发布。
+echo [packaging] 1/3 configure + build Release ...
+cmake -S "%ROOT%" -B "%BUILD_DIR%" -DCMAKE_BUILD_TYPE=Release >nul
+if errorlevel 1 goto :fail
+cmake --build "%BUILD_DIR%" --config Release >nul
+if errorlevel 1 goto :fail
+
+echo [packaging] 2/3 prepare release tree ...
+if exist "%REL_DIR%" rmdir /s /q "%REL_DIR%"
+mkdir "%REL_DIR%\include" "%REL_DIR%\lib" "%REL_DIR%\bin"
+
+rem ---- include: all public headers ----
+xcopy /e /i /q /y "%SRC_INC%" "%REL_DIR%\include" >nul
+if errorlevel 1 goto :fail
+
+rem ---- bin: shared library (gfx.dll or libgfx.dll) ----
+set "DLL="
+if exist "%BUILD_DIR%\src\gfx.dll"      set "DLL=%BUILD_DIR%\src\gfx.dll"
+if exist "%BUILD_DIR%\src\libgfx.dll"   set "DLL=%BUILD_DIR%\src\libgfx.dll"
+if not defined DLL (
+    echo [packaging] ERROR: gfx.dll not found under %BUILD_DIR%\src
+    goto :fail
+)
+copy /y "!DLL!" "%REL_DIR%\bin\" >nul
+
+rem ---- lib: import library (MinGW: libgfx.dll.a; MSVC: gfx.lib) ----
+set "IMP="
+if exist "%BUILD_DIR%\src\gfx.lib"      set "IMP=%BUILD_DIR%\src\gfx.lib"
+if exist "%BUILD_DIR%\src\libgfx.dll.a" set "IMP=%BUILD_DIR%\src\libgfx.dll.a"
+if defined IMP copy /y "!IMP!" "%REL_DIR%\lib\" >nul
+
+echo [packaging] 3/3 done. Release dir: %REL_DIR%
+dir /b "%REL_DIR%" "%REL_DIR%\include" "%REL_DIR%\lib" "%REL_DIR%\bin"
+exit /b 0
+
+:fail
+echo [packaging] FAILED. Check output above.
 exit /b 1

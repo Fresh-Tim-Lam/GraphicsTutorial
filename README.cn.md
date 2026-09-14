@@ -18,8 +18,9 @@
 |------|------|
 | [src/](src/README.md) | `gfx` 渲染 API 源码（**权威实现，随模块演进**） |
 | [tutorials/](tutorials/README.md) | **树状教学**：主题目录含 `.md` 讲解 + `code/` 可运行示例 |
-| [docs/](docs/README.md) | 规范文档中心（conventions / guides / reference / design …） |
+| [docs/](docs/README.md) | 规范文档中心（conventions / guides / refs / design …） |
 | [tests/](tests/README.md) | 测试 |
+| [benchmarks/](benchmarks/README.md) | 正式性能基准（可复现，性能结论的依据） |
 | [scripts/](scripts/README.md) | 可复用开发工具 |
 | [resources/](resources/README.md) | 随项目分发的静态资源 |
 | [packaging/](packaging/README.md) | 打包发布入口（唯一入口 `build_release.cmd`） |

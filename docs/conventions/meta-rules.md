@@ -1,7 +1,7 @@
 # meta-rules.md — 规范元规则
 
 > **用途**：规定"如何制定与维护规范"本身的规则，以及结论记录、违规后果分级与通用协作纪律。
-> **目标读者**：需要新增/修订/废弃任何规范（conventions/、guides/、reference/ 等）的负责人与 AI Agent。
+> **目标读者**：需要新增/修订/废弃任何规范（conventions/、guides/、refs/ 等）的负责人与 AI Agent。
 > **关联文档**：[docs-management.md](docs-management.md)；[collaboration.md](../guides/collaboration.md)（协作细则展开）。
 
 > 状态：生效中（核验于 2026-09-09）。
