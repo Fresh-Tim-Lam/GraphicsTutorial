@@ -68,6 +68,7 @@ Agent 职责：
 | 涉及版本号 | [version.md](docs/conventions/version.md) |
 | 涉及日志 | [logging.md](docs/conventions/logging.md) |
 | 文件/符号命名、语言习惯 | [naming.md](docs/conventions/naming.md) |
+| 新增/调整类定义的成员组织顺序 | [code-style.md](docs/conventions/code-style.md) |
 | 增改 gfx / gfx_math 公共接口或其说明 | [api-docs.md](docs/conventions/api-docs.md) |
 | 改热路径（变换构造、逐点/逐像素循环、批处理）或给出性能结论 | [performance.md](docs/conventions/performance.md) |
 | 与人协作、提问边界 | [collaboration.md](docs/guides/collaboration.md) |
@@ -88,7 +89,7 @@ Agent 职责：
 
 ### Never（禁止）
 - 不手改构建产物与生成物；不提交 secrets；不擅自 push / 强推 / 破坏性 git。
-- 不在 CMakeLists / packaging 中硬编码版本号（版本只出自唯一事实源 `src/gfx/version.hpp`）。
+- 不在 CMakeLists / packaging 中硬编码版本号（版本只出自唯一事实源 `src/include/gfx/core/version.hpp`）。
 - 不在仓库根、src/、docs/ 正文目录放临时文件（一律进 artifacts/ 或 logs/）。
 
 ## 7. Common Pitfalls（已知陷阱）

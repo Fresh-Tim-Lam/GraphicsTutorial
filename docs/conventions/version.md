@@ -8,7 +8,7 @@
 
 ## 规则
 
-- 版本唯一事实源：`src/include/gfx/version.hpp`（随首个模块创建；含 `GFX_VERSION_MAJOR/MINOR/PATCH` 宏）。
+- 版本唯一事实源：`src/include/gfx/core/version.hpp`（随首个模块创建；含 `GFX_VERSION_MAJOR/MINOR/PATCH` 宏）。
 - `src/CMakeLists.txt` 通过读取该文件（或 configure_file 引用）取版本，**禁止**在 CMakeLists / packaging 脚本中硬编码版本号。
 - 发布时只改事实源文件；CMake 重新读取后构建产物随之更新。
 - 语义化版本（major.minor.patch）；教学树内容更新不改 API 版本，API 兼容性变化才升位。

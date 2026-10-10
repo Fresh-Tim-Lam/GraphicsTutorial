@@ -55,5 +55,5 @@ packaging\build_release.cmd
 
 ## 注意事项
 
-- 版本号出自 src/include/gfx/version.hpp（见 [version.md](../conventions/version.md)），勿手改 CMake/打包脚本。
+- 版本号出自 src/include/gfx/core/version.hpp（见 [version.md](../conventions/version.md)），勿手改 CMake/打包脚本。
 - 新增/改动公共头后重建 gfx.dll 并重跑测试；发布属 AGENT.md 的 Ask First 边界。
