@@ -71,3 +71,8 @@ add_test(NAME test_raytracer COMMAND test_raytracer)
 add_executable(test_normalmap test_normalmap.cpp)
 target_link_libraries(test_normalmap PRIVATE gfx_math)
 add_test(NAME test_normalmap COMMAND test_normalmap)
+
+# ---------- 光栅化着色管线测试（透视校正插值、覆盖一致性、深度测试、近平面裁剪、属性透传） ----------
+add_executable(test_shading test_shading.cpp)
+target_link_libraries(test_shading PRIVATE gfx_math)
+add_test(NAME test_shading COMMAND test_shading)

@@ -24,6 +24,7 @@
 | test_ray | 光线求交：反射/折射 + 球/平面/三角形/圆柱/AABB + BVH 一致性 | gfx（ray.hpp/bvh.hpp） |
 | test_raytracer | 光照与递归跟踪：局部光照/阴影/反射/折射/深度/超采样 + 作业三数值对齐 | gfx（lighting.hpp/raytracer.hpp） |
 | test_normalmap | 纹理与法线贴图：三种环绕索引、最近邻/双线性采样、decodeNormal、高度场→法线图（含与解析斜率对齐、strength=0 退化）、球/平面切空间正交性与右手系、perturbNormal、跟踪器的着色法向接口 | gfx（texture.hpp/normalmap.hpp/raytracer.hpp） |
+| test_shading | 光栅化着色管线：覆盖与 flat 光栅化器逐一一致、正交⇒仿射插值、**透视校正重投影不变式**、深度测试（乱序一致）、近平面裁剪（跨界仍满足不变式 + 整块在后方不绘制）、属性透传 | gfx（shading.hpp/triangle.hpp/depth.hpp/view.hpp） |
 
 ## 约定
 
