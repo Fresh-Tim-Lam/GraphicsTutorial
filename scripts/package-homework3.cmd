@@ -10,7 +10,10 @@ rem     使用说明.md                               怎么运行 / 怎么重�
 rem     gfx-results\                              自研渲染引擎 gfx（附加内容）：
 rem        include/ + code/ + CMakeLists.txt        引擎头文件 + 演示源码 + 独立构建脚本
 rem        bin/GfxHw3Scene.exe / GfxRayTracing.exe  免依赖可直接运行的 exe（静态链接）
-rem        results/                                两张渲染结果图
+rem        bin/GfxRayTracingInteractive.exe          光线跟踪：窗口内实时调相机
+rem        bin/GfxShadedRaster.exe                   光栅化着色管线（展厅：程序化贴图 + 阴影贴图）
+rem        bin/GfxShadedRasterInteractive.exe        光栅化着色管线：窗口内实时调相机（双击即用）
+rem        results/                                渲染结果图
 rem   说明：作业三框架是 VS2019 + Eigen + OpenCV，框架部分**不重复触发 MSVC 构建**，
 rem         直接复用已构建好的 artifacts\homework3\bin\HW4.exe（框架 Release 工程 TargetName=HW4）；
 rem         gfx-results 的自研引擎用 CMake 现场构建（静态链接，零 DLL 依赖）。
@@ -75,10 +78,16 @@ copy /y "%ROOT%\tutorials\ray-tracing-framework-scene\code\hw3_scene_trace.cpp" 
 copy /y "%ROOT%\tutorials\ray-tracing\code\ray_tracing.cpp"                     "%GFXDIR%\code\ray_tracing.cpp"     >nul || goto :fail
 copy /y "%ROOT%\tutorials\ray-tracing\code\ray_tracing_scene.hpp"               "%GFXDIR%\code\ray_tracing_scene.hpp"       >nul || goto :fail
 copy /y "%ROOT%\tutorials\ray-tracing\code\ray_tracing_interactive.cpp"         "%GFXDIR%\code\ray_tracing_interactive.cpp" >nul || goto :fail
+rem 光栅化着色管线（展厅场景：程序化颜色/法线贴图 + 阴影贴图）—— 离线出图版 + 窗口交互版
+copy /y "%ROOT%\tutorials\shaded-raster\code\shaded_raster.cpp"             "%GFXDIR%\code\shaded_raster.cpp"             >nul || goto :fail
+copy /y "%ROOT%\tutorials\shaded-raster\code\shaded_raster_interactive.cpp" "%GFXDIR%\code\shaded_raster_interactive.cpp" >nul || goto :fail
+copy /y "%ROOT%\tutorials\shaded-raster\code\shaded_raster_scene.hpp"       "%GFXDIR%\code\shaded_raster_scene.hpp"       >nul || goto :fail
 rem 窗口交互演示需要 gfx 的 Win32 窗口实现；直接编进 exe ⇒ 仍然零 DLL 依赖
 copy /y "%ROOT%\src\window_win32.cpp"                                           "%GFXDIR%\code\window_win32.cpp"            >nul || goto :fail
 copy /y "%ROOT%\tutorials\ray-tracing-framework-scene\output\hw3_gfx_result.png" "%GFXDIR%\results\gfx_engine_hw3_scene.png"    >nul || goto :fail
 copy /y "%ROOT%\tutorials\ray-tracing\output\ray-tracing.png"                    "%GFXDIR%\results\gfx_engine_custom_scene.png" >nul || goto :fail
+copy /y "%ROOT%\tutorials\shaded-raster\output\shaded-raster.png"                 "%GFXDIR%\results\gfx_engine_shaded_raster.png"           >nul || goto :fail
+copy /y "%ROOT%\tutorials\shaded-raster\output\shaded-raster-no-shadow.png"       "%GFXDIR%\results\gfx_engine_shaded_raster_no_shadow.png" >nul || goto :fail
 
 echo [4/6] 构建 gfx-results 的可执行文件（静态链接，零 DLL 依赖）
 rem Ninja 无法 chdir 到含中文的路径 ⇒ 构建放到纯 ASCII 的临时目录
@@ -94,6 +103,8 @@ mkdir "%GFXDIR%\bin" 2>nul
 copy /y "%GFXBLD%\build\GfxHw3Scene.exe"   "%GFXDIR%\bin\GfxHw3Scene.exe"   >nul || goto :fail
 copy /y "%GFXBLD%\build\GfxRayTracing.exe" "%GFXDIR%\bin\GfxRayTracing.exe" >nul || goto :fail
 copy /y "%GFXBLD%\build\GfxRayTracingInteractive.exe" "%GFXDIR%\bin\GfxRayTracingInteractive.exe" >nul || goto :fail
+copy /y "%GFXBLD%\build\GfxShadedRaster.exe"             "%GFXDIR%\bin\GfxShadedRaster.exe"             >nul || goto :fail
+copy /y "%GFXBLD%\build\GfxShadedRasterInteractive.exe"  "%GFXDIR%\bin\GfxShadedRasterInteractive.exe"  >nul || goto :fail
 rmdir /s /q "%GFXBLD%" 2>nul
 
 echo [5/6] 校验包内容
@@ -113,12 +124,19 @@ if not exist "%GFXDIR%\code\hw3_scene_trace.cpp"        goto :fail
 if not exist "%GFXDIR%\code\ray_tracing.cpp"            goto :fail
 if not exist "%GFXDIR%\code\ray_tracing_scene.hpp"      goto :fail
 if not exist "%GFXDIR%\code\ray_tracing_interactive.cpp" goto :fail
+if not exist "%GFXDIR%\code\shaded_raster.cpp"           goto :fail
+if not exist "%GFXDIR%\code\shaded_raster_interactive.cpp" goto :fail
+if not exist "%GFXDIR%\code\shaded_raster_scene.hpp"     goto :fail
+if not exist "%GFXDIR%\include\gfx\render\pattern.hpp"   goto :fail
 if not exist "%GFXDIR%\code\window_win32.cpp"           goto :fail
 if not exist "%GFXDIR%\bin\GfxHw3Scene.exe"             goto :fail
 if not exist "%GFXDIR%\bin\GfxRayTracing.exe"           goto :fail
 if not exist "%GFXDIR%\bin\GfxRayTracingInteractive.exe" goto :fail
+if not exist "%GFXDIR%\bin\GfxShadedRaster.exe"              goto :fail
+if not exist "%GFXDIR%\bin\GfxShadedRasterInteractive.exe"   goto :fail
 if not exist "%GFXDIR%\results\gfx_engine_hw3_scene.png"    goto :fail
 if not exist "%GFXDIR%\results\gfx_engine_custom_scene.png" goto :fail
+if not exist "%GFXDIR%\results\gfx_engine_shaded_raster.png" goto :fail
 
 echo [6/6] 打包
 if exist "%ZIP%" del /q "%ZIP%"
@@ -132,7 +150,8 @@ for %%A in ("%ZIP%") do if %%~zA LSS 1000 (
 )
 for %%A in ("%ZIP%") do echo [完成] 提交包：%ZIP%   %%~zA 字节
 echo         HW3.exe 已附带 OpenCV 与 VC 运行库，分发后可直接运行
-echo         gfx-results\ 内为自研渲染引擎 gfx（引擎 + 源码 + CMakeLists + 可直接运行的 exe + 结果图）
+echo         gfx-results\ 内为自研渲染引擎 gfx（引擎 + 源码 + CMakeLists + 可直接运行的 5 个 exe + 结果图）
+echo         bin 里的可交互 exe：GfxRayTracingInteractive.exe / GfxShadedRasterInteractive.exe（双击即用）
 exit /b 0
 
 :failpop
