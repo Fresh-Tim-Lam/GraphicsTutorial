@@ -34,7 +34,7 @@
 - [ray-tracing/](ray-tracing/README.md) —— 光线跟踪：光照 + 反射/折射 + 阴影 + BVH + 超采样，用 gfx 自己渲染一张图；同目录还有**窗口交互版**（实时调相机）。
 - [ray-tracing-framework-scene/](ray-tracing-framework-scene/README.md) —— 用 gfx 复刻**课程框架（作业三）的原始场景**，与框架基准图做**逐像素等价性比对**。
 - [normal-mapping/](normal-mapping/README.md) —— 法线贴图：贴图采样 + 切空间 TBN + 程序化高度场，把光滑表面做出凹凸（并观察凹凸如何扭曲镜面反射）。
-- [shaded-raster/](shaded-raster/README.md) —— 光栅化着色管线：顶点属性 + **透视校正插值** + 逐像素着色 + **逐光源阴影贴图**，把同一套纹理/切空间用在**三角形光栅化**路径上（GPU 里真正跑的那条路）；同目录还有**窗口交互版**（实时调相机 + 法线贴图/阴影开关）。
+- [shaded-raster/](shaded-raster/README.md) —— 光栅化着色管线：顶点属性 + **透视校正插值** + 逐像素着色 + **程序化贴图（颜色 + 法线，无需外部图片）** + **逐光源阴影贴图**；场景是"瓷砖地面 + 四面彩色砖墙 + 碳纤维立方体 + 大理石球"的展厅；同目录还有**窗口交互版**（实时调相机 + 贴图/阴影开关 + 拖动时半分辨率）。
 
 ### 教学演示目标（CMake）
 
@@ -51,6 +51,6 @@
 | tutorial_ray_tracing | 光线跟踪（光照 + 反射/折射 + 阴影 + BVH + 超采样，用 gfx 自己渲染），产物名 `RayTracing` | `cmake --build build --target tutorial_ray_tracing` 后运行 `build/tutorials/RayTracing --help` |
 | tutorial_ray_tracing_interactive | 光线跟踪**交互**演示：窗口内实时调相机（拖动转视角 / WASD 移动 / 滚轮推拉 / 空格出图），产物名 `RayTracingInteractive` | `cmake --build build --target tutorial_ray_tracing_interactive` 后运行 `build/tutorials/RayTracingInteractive` |
 | tutorial_normal_mapping | 法线贴图（对照组球 / 砖缝 / 波纹 + 棋格地面；程序化生成法线图 + TBN 扰动，含 A/B 对照），产物名 `NormalMapping` | `cmake --build build --target tutorial_normal_mapping` 后运行 `build/tutorials/NormalMapping --help` |
-| tutorial_shaded_raster | 光栅化着色管线（地面/立方体/球全由三角形拼出；透视校正插值 + 逐像素采样法线贴图 + `shadeLocal` + **逐光源阴影贴图**），产物名 `ShadedRaster` | `cmake --build build --target tutorial_shaded_raster` 后运行 `build/tutorials/ShadedRaster --help` |
-| tutorial_shaded_raster_interactive | 光栅化着色管线**交互**演示：窗口内实时调相机（拖动转视角 / WASD 移动 / 滚轮推拉 / `1` 切法线贴图 / `2` 切阴影 / 空格出图），产物名 `ShadedRasterInteractive` | `cmake --build build --target tutorial_shaded_raster_interactive` 后运行 `build/tutorials/ShadedRasterInteractive` |
+| tutorial_shaded_raster | 光栅化着色管线（展厅场景：瓷砖地面 + 四面彩色砖墙 + 碳纤维立方体 + 大理石球，全由三角形拼出；透视校正插值 + 程序化颜色/法线贴图 + `shadeLocal` + **逐光源阴影贴图**），产物名 `ShadedRaster` | `cmake --build build --target tutorial_shaded_raster` 后运行 `build/tutorials/ShadedRaster --help` |
+| tutorial_shaded_raster_interactive | 光栅化着色管线**交互**演示：窗口内实时调相机（拖动转视角 / WASD 移动 / 滚轮推拉 / `1` 法线 / `2` 阴影 / `3` 颜色贴图 / 空格出图；拖动时自动半分辨率），产物名 `ShadedRasterInteractive` | `cmake --build build --target tutorial_shaded_raster_interactive` 后运行 `build/tutorials/ShadedRasterInteractive` |
 | tutorial_hw3_scene | 复刻课程框架（作业三）原始场景并与框架基准图逐像素比对，产物名 `Hw3SceneTrace` | `cmake --build build --target tutorial_hw3_scene` 后运行 `build/tutorials/Hw3SceneTrace --help` |

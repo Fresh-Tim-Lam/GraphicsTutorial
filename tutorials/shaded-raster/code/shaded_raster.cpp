@@ -1,20 +1,25 @@
-// shaded_raster.cpp —— 光栅化着色管线演示（离线出图版）：带纹理 + 法线贴图 + 阴影贴图的立方体 / 球 / 地面
+// shaded_raster.cpp —— 光栅化着色管线演示（离线出图版）：瓷砖地面 + 四面彩色砖墙 + 碳纤维立方体 + 大理石球
 //
 // 用途：演示 `gfx/render/shading.hpp` 的能力 —— 顶点属性（位置/法向/切线/uv）经
 //       **投影 + 近平面裁剪 + 透视校正插值**后，逐像素调用片元着色器：
-//         采样法线贴图 → 切线空间扰动法向 → 喂给 shadeLocal（Blinn-Phong）→ 逐像素颜色；
+//         采样颜色贴图（乘到 diffuse 上）+ 采样法线贴图（扰动法向）→ shadeLocal（Blinn-Phong）→ 逐像素颜色；
 //       阴影则由 `gfx/render/shadowmap.hpp` 提供（光栅化路径没有场景求交，用不了阴影射线）。
+//
+// 贴图全部由 `gfx/render/pattern.hpp` **程序化生成**（无外部图片）：大理石 / 瓷砖 / 砖墙 / 碳纤维斜纹，
+//       每种图案同时给出颜色与高度 ⇒ `makePatternMaps` 一次得到配对的颜色图 + 法线图。
 //
 // 与窗口交互版（shaded_raster_interactive.cpp）**共用** shaded_raster_scene.hpp 的场景与着色代码；
 // 本文件只负责"参数解析 + 渲一张 PNG（含 A/B 对照统计）"。
 //
-// 用法：build/tutorials/ShadedRaster [--output <out.png>] [--size WxH] [--strength s]
-//                                     [--no-shadow] [--compare] [--help]
-//   --strength s  凹凸强度（默认 1.0；0 = 贴图退化成平整法向）
+// 用法：build/tutorials/ShadedRaster [--output <out.png>] [--size WxH] [--strength s] [--shadow-size n]
+//                                     [--no-shadow] [--no-map] [--no-albedo] [--compare] [--help]
+//   --strength s  凹凸强度（默认 1.0；0 = 法线贴图退化成平整法向，但颜色贴图仍在）
 //   --no-shadow   关闭阴影贴图（A/B 对照）
+//   --no-map      关闭法线贴图（A/B 对照）
+//   --no-albedo   关闭颜色贴图（只剩常量材质色，A/B 对照）
 //   --compare     额外渲染一张"关闭阴影"的图并统计差异像素与椒盐像素（默认关闭）
 //
-// 关联：tutorials/shaded-raster/code/shaded_raster_scene.hpp、src/include/gfx/render/shading.hpp、shadowmap.hpp
+// 关联：tutorials/shaded-raster/code/shaded_raster_scene.hpp、src/include/gfx/render/{shading,shadowmap,pattern}.hpp
 
 #include <gfx/core/canvas.hpp>
 #include <gfx/core/color.hpp>
@@ -48,10 +53,8 @@ using gfx::Color;
 using gfx::View;
 using gfx::math::Vec3;
 
-// 场景在光源视角下的范围实测 x∈[−8.5, 8.5]、y∈[−6.2, 5.5]、深度∈[1.5, 13.8]，故正交半宽取 10、深度取 [0.1, 24] 留余量
-constexpr float kShadowExtent = 10.0f;
-constexpr float kShadowNearZ = 0.1f;
-constexpr float kShadowFarZ = 24.0f;
+// 程序化贴图分辨率（每套外观两张图：颜色 + 法线）
+constexpr int kMapSize = 320;
 
 struct Options {
     std::string outputPath = "output/shaded-raster.png";
@@ -61,6 +64,8 @@ struct Options {
     float strength = 1.0f;
     int shadowSize = 1024;
     bool shadow = true;
+    bool normalMaps = true;
+    bool albedo = true;
     bool compare = false;
 };
 
@@ -68,13 +73,15 @@ void printUsage() {
     std::cout <<
         "用法：\n"
         "  ShadedRaster [--output <out.png>] [--size WxH] [--strength s] [--shadow-size n]\n"
-        "               [--no-shadow] [--compare] [--help]\n"
+        "               [--no-shadow] [--no-map] [--no-albedo] [--compare] [--help]\n"
         "\n"
         "  --output <file>  结果 PNG 路径（默认 output/shaded-raster.png，父目录自动创建）\n"
         "  --size WxH       画布尺寸（默认 800x600）\n"
-        "  --strength s     凹凸强度（默认 1.0；0 = 贴图退化为平整法向）\n"
+        "  --strength s     凹凸强度（默认 1.0；0 = 法线贴图退化为平整法向）\n"
         "  --shadow-size n  阴影贴图分辨率（默认 1024）\n"
         "  --no-shadow      关闭阴影贴图（A/B 对照）\n"
+        "  --no-map         关闭法线贴图（A/B 对照）\n"
+        "  --no-albedo      关闭颜色贴图（A/B 对照）\n"
         "  --compare        额外渲染一张关闭阴影的图并统计差异像素（默认关闭）\n"
         "  --help           显示本帮助\n";
 }
@@ -85,6 +92,8 @@ bool parseArgs(int argc, char** argv, Options& opt, int& exitCode) {
         if (arg == "--help" || arg == "-h") { printUsage(); exitCode = 0; return false; }
         if (arg == "--output" && i + 1 < argc) { opt.outputPath = argv[++i]; }
         else if (arg == "--no-shadow") { opt.shadow = false; }
+        else if (arg == "--no-map") { opt.normalMaps = false; }
+        else if (arg == "--no-albedo") { opt.albedo = false; }
         else if (arg == "--compare") { opt.compare = true; }
         else if (arg == "--strength" && i + 1 < argc) { opt.strength = static_cast<float>(std::atof(argv[++i])); }
         else if (arg == "--shadow-size" && i + 1 < argc) { opt.shadowSize = std::atoi(argv[++i]); }
@@ -121,23 +130,17 @@ int main(int argc, char** argv) {
     int exitCode = 0;
     if (!parseArgs(argc, argv, opt, exitCode)) return exitCode;
 
-    // ---- 场景（与窗口交互版共用同一份构造代码）----
-    const sr_demo::Scene scene = sr_demo::makeScene(256, opt.strength);
+    // ---- 场景（与窗口交互版共用同一份构造代码；贴图程序化生成）----
+    const sr_demo::Scene scene = sr_demo::makeScene(kMapSize, opt.strength);
 
-    // ---- 相机（与共享头 CameraRig 的默认取景一致；这里显式写 eye/target 便于对照）----
-    const Vec3 eye(0.0f, 1.30f, 4.60f);
-    View view;
-    view.setViewport(opt.width, opt.height);
-    view.lookAt(eye, Vec3(0.0f, -0.25f, -0.10f), Vec3(0.0f, 1.0f, 0.0f));
-    view.setPerspective(42.0f * sr_demo::kPi / 180.0f,
-                        static_cast<float>(opt.width) / static_cast<float>(opt.height), 0.1f, 100.0f);
+    // ---- 相机（与交互版的默认取景完全一致：同一份 CameraRig）----
+    const sr_demo::CameraRig cam;
+    const Vec3 eye = cam.position;
+    const View view = cam.makeView(opt.width, opt.height);
 
     // ---- 阴影贴图（一个光源一张；只依赖光源与场景，与相机无关）----
     sr_demo::ShadowConfig shadowConfig;
     shadowConfig.size = opt.shadowSize;
-    shadowConfig.extent = kShadowExtent;
-    shadowConfig.nearZ = kShadowNearZ;
-    shadowConfig.farZ = kShadowFarZ;
 
     std::vector<gfx::ShadowMap> shadowMaps;
     if (opt.shadow) shadowMaps = sr_demo::buildShadowMaps(scene, shadowConfig);
@@ -148,15 +151,17 @@ int main(int argc, char** argv) {
     std::cout << "光栅化着色管线演示（顶点属性 → 透视校正插值 → 逐像素着色）\n"
                  "  分辨率        : " << opt.width << "x" << opt.height << "\n"
               << "  凹凸强度      : " << opt.strength << "\n"
-              << "  场景          : 地面(棋格) + 立方体(砖缝) + 球(波纹)，全部由三角形拼出\n"
-              << "  片元着色      : 采样法线贴图 → TBN 扰动 → shadeLocal(Blinn-Phong) + gamma\n"
+              << "  贴图          : " << kMapSize << "² 程序化生成（颜色 + 法线成对；图案：大理石/瓷砖/砖墙/碳纤维）\n"
+              << "  场景          : 瓷砖地面 + 四面彩色砖墙 + 碳纤维立方体 + 大理石球\n"
+              << "  片元着色      : 采样颜色贴图（⊙ diffuse）+ 法线贴图（TBN 扰动）→ shadeLocal + gamma\n"
               << "  阴影          : " << (opt.shadow
                      ? "逐光源一张 " + std::to_string(shadowConfig.size) + "² 阴影贴图（正交光源视角 + 法向偏移 + 斜率缩放容差 + PCF 3×3）"
                      : std::string("已用 --no-shadow 关闭"))
               << "\n";
 
     sr_demo::RenderOptions render;
-    render.normalMaps = true;
+    render.normalMaps = opt.normalMaps;
+    render.albedo = opt.albedo;
     render.shadow = opt.shadow;
 
     // ---- 主 pass：光栅化 + 深度测试 + 片元着色（阴影在片元回调里查表）----
@@ -175,8 +180,7 @@ int main(int argc, char** argv) {
     if (opt.compare) {
         Canvas plainCanvas(opt.width, opt.height);
         plainCanvas.clear(Color(24, 28, 38));
-        sr_demo::RenderOptions plainRender;
-        plainRender.normalMaps = true;
+        sr_demo::RenderOptions plainRender = render;
         plainRender.shadow = false;
         sr_demo::renderScene(plainCanvas, view, eye, scene, {}, plainRender);
 

@@ -81,3 +81,8 @@ add_test(NAME test_shading COMMAND test_shading)
 add_executable(test_shadowmap test_shadowmap.cpp)
 target_link_libraries(test_shadowmap PRIVATE gfx_math)
 add_test(NAME test_shadowmap COMMAND test_shadowmap)
+
+# ---------- 程序化图案测试（噪声基元确定性/范围/可平铺、四个图案的结构、颜色与法线贴图生成） ----------
+add_executable(test_pattern test_pattern.cpp)
+target_link_libraries(test_pattern PRIVATE gfx_math)
+add_test(NAME test_pattern COMMAND test_pattern)

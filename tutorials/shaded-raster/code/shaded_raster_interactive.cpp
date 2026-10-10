@@ -6,7 +6,10 @@
 // 为什么能实时：光栅化一条三角形的代价与"屏幕上有多少像素被覆盖"成正比（不是每像素求交），
 //       而且**阴影贴图只依赖光源与场景、与相机无关** —— 所以贴图在启动时建一次就够，
 //       相机怎么动都不必重建。于是每帧只剩主 pass 的光栅化 + 逐像素着色。
-//       实测每像素约 0.27 µs（与分辨率近似线性）⇒ 320² ≈ 47 fps、480×360 ≈ 21 fps、640×480 ≈ 12 fps。
+//       本场景四面是墙 ⇒ 屏幕几乎全被覆盖，逐像素代价直接正比于像素数，故再加一招
+//       "拖动/按键时降到半分辨率、松手立刻重渲全分辨率"（见 kInteractDiv）。
+//       实测 640×480：**拖动中 ≈ 30 fps**（半分辨率）、静止时全分辨率 ≈ 7.7 fps
+//       （静止只在改动后渲一帧，所以"截一张清晰的图"永远是全分辨率的）。
 //
 // 用法：build/tutorials/ShadedRasterInteractive [--size WxH] [--frames N] [--shadow-size n]
 //                                               [--strength s] [--shot] [--help]
@@ -20,7 +23,7 @@
 //   左键拖动   转视角（yaw / pitch）      右键拖动   平移相机（沿视线的右 / 上方向）
 //   W / S      上升 / 下降（世界竖直）     A / D      左右平移
 //   滚轮       前后推拉                    R          相机复位
-//   1          切换法线贴图              2          切换阴影
+//   1          切换法线贴图              2          切换阴影          3          切换颜色贴图
 //   空格       高分辨率渲染一张并存 PNG（路径打印在控制台）   Esc  退出
 //
 // 关联文档：tutorials/shaded-raster/README.md；src/include/gfx/render/window.hpp
@@ -34,6 +37,7 @@
 
 #include "shaded_raster_scene.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -71,6 +75,14 @@ constexpr int kShotWidth = 800;
 constexpr int kShotHeight = 600;
 constexpr const char* kShotPath = "shaded-raster-interactive.png";
 
+// 程序化贴图分辨率（每套外观两张图：颜色 + 法线）—— 与离线版一致
+constexpr int kMapSize = 320;
+
+// 交互中把预览降到 1/kInteractDiv 分辨率（最近邻放大回窗口），松手立刻重渲全分辨率。
+// 房间里全是三面墙 ⇒ 屏幕几乎全被三角形覆盖，逐像素着色的代价直接正比于像素数，
+// 于是"拖动时降分辨率"是最划算的一招：视觉上只是拖动瞬间略糊，停下就是清晰的。
+constexpr int kInteractDiv = 2;
+
 const Color kBackground(24, 28, 38);
 
 void printUsage() {
@@ -84,6 +96,7 @@ void printUsage() {
         "  --shadow-size n  阴影贴图分辨率（默认 1024；只建一次，与帧率无关）\n"
         "  --strength s     凹凸强度（默认 1.0；0 = 贴图退化为平整法向）\n"
         "  --shot           用初始相机渲一张 800x600 存 PNG 后立刻退出（不建窗口）\n"
+        "  --force-interact 强制按\"拖动中\"的低分辨率预览跑（冒烟测试用）\n"
         "  --help           显示本帮助\n";
 }
 
@@ -92,7 +105,7 @@ void printControls() {
                  "  左键拖动：转视角        右键拖动：平移（视线的右 / 上）\n"
                  "  W / S：上升 / 下降      A / D：左右平移\n"
                  "  滚轮：前后推拉          R：相机复位\n"
-                 "  1：切换法线贴图        2：切换阴影\n"
+                 "  1：切换法线贴图        2：切换阴影        3：切换颜色贴图\n"
                  "  空格：高分辨率渲染并存 PNG（打印路径）   Esc：退出\n\n";
 }
 
@@ -115,6 +128,17 @@ void renderShot(const sr_demo::CameraRig& cam, const sr_demo::Scene& scene,
     else std::fprintf(stderr, "错误：保存 PNG 失败 —— %s\n", error.c_str());
 }
 
+// 最近邻放大：把小图铺满大画布（**只在交互中**用来撑住帧率，停下立刻重渲全分辨率）
+void blitScaled(const Canvas& src, Canvas& dst) {
+    if (src.width() <= 0 || src.height() <= 0) return;
+    for (int y = 0; y < dst.height(); ++y) {
+        const int sy = y * src.height() / dst.height();
+        for (int x = 0; x < dst.width(); ++x) {
+            dst.putPixel(x, y, src.pixelAt(x * src.width() / dst.width(), sy));
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -128,10 +152,12 @@ int main(int argc, char** argv) {
     int shadowSize = 1024;
     float strength = 1.0f;
     bool shotOnly = false;
+    bool forceInteract = false;   // 强制走"交互中"的低分辨率路径（冒烟测试用）
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--help" || arg == "-h") { printUsage(); return 0; }
         if (arg == "--shot") { shotOnly = true; continue; }
+        if (arg == "--force-interact") { forceInteract = true; continue; }
         if (arg == "--frames" && i + 1 < argc) { frames = std::atoi(argv[++i]); continue; }
         if (arg == "--shadow-size" && i + 1 < argc) { shadowSize = std::atoi(argv[++i]); continue; }
         if (arg == "--strength" && i + 1 < argc) { strength = static_cast<float>(std::atof(argv[++i])); continue; }
@@ -159,7 +185,7 @@ int main(int argc, char** argv) {
     std::cout << std::unitbuf;   // 控制台应用：每次输出立即刷新
 
     // ---- 场景 + 相机 + 阴影贴图（贴图只建一次：它只依赖光源与场景，与相机无关）----
-    const sr_demo::Scene scene = sr_demo::makeScene(256, strength);
+    const sr_demo::Scene scene = sr_demo::makeScene(kMapSize, strength);
     sr_demo::CameraRig cam;
     sr_demo::RenderOptions render;   // normalMaps / shadow 都默认开
 
@@ -170,7 +196,8 @@ int main(int argc, char** argv) {
     const double buildSeconds = std::chrono::duration<double>(
         std::chrono::high_resolution_clock::now() - buildStart).count();
 
-    std::cout << "场景：地面(棋格) + 立方体(砖缝) + 球(波纹) = " << scene.triangles.size() << " 个三角形\n"
+    std::cout << "场景：瓷砖地面 + 4 面彩色砖墙 + 碳纤维立方体 + 大理石球 = " << scene.triangles.size()
+              << " 个三角形（贴图 " << kMapSize << "² 程序化生成）\n"
               << "阴影贴图：" << shadowMaps.size() << " 张 " << shadowSize << "²（启动时建一次，用时 "
               << buildSeconds * 1000.0 << " ms；相机移动不需要重建）\n";
 
@@ -182,7 +209,7 @@ int main(int argc, char** argv) {
     printControls();
 
     gfx::Window window("光栅化着色管线 · 摄像头交互"
-                       "（左键转视角 / W·S 升降 / A·D 左右 / 滚轮前后 / 1 贴图 / 2 阴影 / 空格出图）",
+                       "（左键转视角 / W·S 升降 / A·D 左右 / 滚轮前后 / 1 法线 / 2 阴影 / 3 颜色 / 空格出图）",
                        width, height);
     if (!window.isOpen()) {
         std::cerr << "错误：窗口创建失败。\n";
@@ -194,9 +221,19 @@ int main(int argc, char** argv) {
     int frame = 0;
     double frameMsSum = 0.0;
     int frameMsCount = 0;
+    bool interacting = false;        // 本帧是否处于"交互中"（决定预览分辨率）
+    Canvas lowRes(std::max(64, width / kInteractDiv), std::max(64, height / kInteractDiv));
 
     while (window.pollEvents()) {
         const gfx::MouseState& ms = window.mouse();
+
+        const bool inputActive = forceInteract || ms.leftDown || ms.rightDown || ms.wheel != 0 ||
+                                 window.keyDown('W') || window.keyDown('S') ||
+                                 window.keyDown('A') || window.keyDown('D');
+        if (inputActive != interacting) {
+            interacting = inputActive;
+            dirty = true;   // 交互状态变了 ⇒ 按新分辨率重渲一张
+        }
 
         // 左键拖动 ⇒ 转视角
         if (ms.leftDown && (ms.dx != 0 || ms.dy != 0)) {
@@ -233,7 +270,7 @@ int main(int argc, char** argv) {
                         cam.yaw * 180.0f / sr_demo::kPi, cam.pitch * 180.0f / sr_demo::kPi);
         }
 
-        // 1 / 2 ⇒ 实时开关法线贴图与阴影（对照观察它们各自的作用）
+        // 1 / 2 / 3 ⇒ 实时开关法线贴图 / 阴影 / 颜色贴图（对照观察它们各自的作用）
         if (window.keyPressed('1')) {
             render.normalMaps = !render.normalMaps;
             dirty = true;
@@ -243,6 +280,11 @@ int main(int argc, char** argv) {
             render.shadow = !render.shadow;
             dirty = true;
             std::printf("（阴影：%s）\n", render.shadow ? "开" : "关");
+        }
+        if (window.keyPressed('3')) {
+            render.albedo = !render.albedo;
+            dirty = true;
+            std::printf("（颜色贴图：%s）\n", render.albedo ? "开" : "关");
         }
 
         if (window.keyPressed(gfx::Key::Space)) {
@@ -257,11 +299,16 @@ int main(int argc, char** argv) {
         }
 
         if (dirty || autoRun) {
-            const View view = cam.makeView(width, height);
+            // 交互中降分辨率，其余时刻全分辨率（松手那一帧 interacting 变 false ⇒ 立即补一张清晰的）
+            const int rw = interacting ? lowRes.width() : width;
+            const int rh = interacting ? lowRes.height() : height;
+            const View view = cam.makeView(rw, rh);
             const auto frameStart = std::chrono::high_resolution_clock::now();
 
-            window.canvas().clear(kBackground);
-            sr_demo::renderScene(window.canvas(), view, cam.position, scene, shadowMaps, render);
+            Canvas& target = interacting ? lowRes : window.canvas();
+            target.clear(kBackground);
+            sr_demo::renderScene(target, view, cam.position, scene, shadowMaps, render);
+            if (interacting) blitScaled(lowRes, window.canvas());
             window.present();
 
             const double frameMs = std::chrono::duration<double>(
@@ -269,8 +316,9 @@ int main(int argc, char** argv) {
             frameMsSum += frameMs;
             ++frameMsCount;
             if (frameMsSum >= 1000.0) {   // 约每秒报一次平均帧耗时，避免刷屏
-                std::printf("（预览 %dx%d：平均 %.1f ms/帧 ≈ %.1f fps）\n", width, height,
-                            frameMsSum / frameMsCount, 1000.0 * frameMsCount / frameMsSum);
+                std::printf("（预览 %dx%d%s：平均 %.1f ms/帧 ≈ %.1f fps）\n", rw, rh,
+                            interacting ? "（拖动中半分辨率）" : "", frameMsSum / frameMsCount,
+                            1000.0 * frameMsCount / frameMsSum);
                 frameMsSum = 0.0;
                 frameMsCount = 0;
             }
