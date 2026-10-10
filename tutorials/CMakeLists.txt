@@ -115,6 +115,17 @@ add_executable(tutorial_shaded_raster shaded-raster/code/shaded_raster.cpp)
 target_link_libraries(tutorial_shaded_raster PRIVATE gfx_math)
 set_target_properties(tutorial_shaded_raster PROPERTIES OUTPUT_NAME ShadedRaster)
 
+# ---------- 光栅化着色管线交互演示（窗口内实时调相机 + 法线贴图/阴影开关；需要 gfx.dll） ----------
+add_executable(tutorial_shaded_raster_interactive shaded-raster/code/shaded_raster_interactive.cpp)
+target_link_libraries(tutorial_shaded_raster_interactive PRIVATE gfx)
+set_target_properties(tutorial_shaded_raster_interactive PROPERTIES OUTPUT_NAME ShadedRasterInteractive)
+
+add_custom_command(TARGET tutorial_shaded_raster_interactive POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:gfx>
+        "$<TARGET_FILE_DIR:tutorial_shaded_raster_interactive>/"
+    COMMENT "将 gfx.dll 拷贝到演示目录")
+
 # ---------- 光线跟踪交互演示（窗口内实时调相机：拖动 / WASD / 滚轮；需要 gfx.dll） ----------
 add_executable(tutorial_ray_tracing_interactive ray-tracing/code/ray_tracing_interactive.cpp)
 target_link_libraries(tutorial_ray_tracing_interactive PRIVATE gfx)
