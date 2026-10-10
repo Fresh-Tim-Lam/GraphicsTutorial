@@ -83,8 +83,18 @@ if exist "%STAGE%\build" rmdir /s /q "%STAGE%\build"
 
 echo [6/6] 打包 ...
 if exist "%ZIP%" del /q "%ZIP%"
-powershell -NoProfile -Command "Compress-Archive -Path '%STAGE%' -DestinationPath '%ZIP%' -Force"
+rem 用 .NET ZipFile 直接压目录（比 Compress-Archive 更能给出明确退出码），并显式校验产物。
+rem 注：若 IDE 索引器正占用 staging 下的文件，压缩会失败 —— 此时脚本必须报错而不是"假成功"。
+powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('%STAGE%', '%ZIP%')"
 if errorlevel 1 goto :fail
+if not exist "%ZIP%" (
+    echo [失败] zip 未生成。
+    goto :fail
+)
+for %%A in ("%ZIP%") do if %%~zA LSS 1000 (
+    echo [失败] zip 体积异常（%%~zA 字节），可能未正确写入。
+    goto :fail
+)
 
 echo.
 echo [完成] 提交包：%ZIP%

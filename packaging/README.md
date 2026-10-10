@@ -14,7 +14,7 @@
 
 ```
 packaging/release/
-├─ include/gfx/        # 公共头文件（含 gfx/math/ 头文件子库）
+├─ include/gfx/        # 公共头文件（按职责分层：core/、geom/、render/、math/）
 ├─ lib/                # 导入库（MinGW: libgfx.dll.a；MSVC: gfx.lib）
 └─ bin/                # 动态库（MinGW: libgfx.dll；MSVC: gfx.dll）
 ```
