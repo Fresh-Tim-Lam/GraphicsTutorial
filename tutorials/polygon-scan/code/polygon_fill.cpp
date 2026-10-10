@@ -2,8 +2,9 @@
 //
 // 用途：读取多边形顶点（文本文件或交互输入），做扫描线填充与边界绘制，
 //       可保存 PNG、也可在窗口中逐条扫描线动画演示。
-// 权威实现：gfx::fillPolygon / gfx::ScanlineFiller / gfx::drawLine（src/include/gfx/raster.hpp）；
-//           本文件只负责"输入解析 + 世界坐标→像素坐标映射 + 展示"。
+// 权威实现：gfx::fillPolygon / gfx::ScanlineFiller / gfx::drawLine（src/include/gfx/render/raster.hpp）；
+//           世界坐标 → 像素坐标的映射由 gfx::View 承担（src/include/gfx/render/view.hpp）；
+//           本文件只负责"输入解析 + 相机配置 + 展示"。
 // 构建：cmake -S . -B build ; cmake --build build --target tutorial_polygon_fill
 // 运行：build/tutorials/PolygonFill.exe --input data/convex.txt --output out.png
 //       build/tutorials/PolygonFill.exe --input data/concave.txt --window --animate
@@ -16,13 +17,13 @@
 //   ...
 // 说明：空行与以 '#' 开头的行会被忽略；末尾允许重复写一次首点（程序自动识别为闭合点）。
 
-#include <gfx/canvas.hpp>
-#include <gfx/color.hpp>
-#include <gfx/png.hpp>
-#include <gfx/raster.hpp>
-#include <gfx/window.hpp>
+#include <gfx/core/canvas.hpp>
+#include <gfx/core/color.hpp>
+#include <gfx/render/png.hpp>
+#include <gfx/render/raster.hpp>
+#include <gfx/render/view.hpp>
+#include <gfx/render/window.hpp>
 
-#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
@@ -182,36 +183,6 @@ bool readPolygonInteractive(std::vector<Vec2>& out, std::string& error) {
     return true;
 }
 
-// 世界坐标 → 像素坐标：按包围盒等比缩放并居中，y 轴翻转（世界 y 向上，屏幕 y 向下）
-std::vector<Vec2> toPixelSpace(const std::vector<Vec2>& world, int width, int height, float& scaleOut) {
-    float minX = world.front().x, maxX = world.front().x;
-    float minY = world.front().y, maxY = world.front().y;
-    for (const Vec2& v : world) {
-        minX = std::min(minX, v.x); maxX = std::max(maxX, v.x);
-        minY = std::min(minY, v.y); maxY = std::max(maxY, v.y);
-    }
-    const float spanX = std::max(maxX - minX, 1e-6f);
-    const float spanY = std::max(maxY - minY, 1e-6f);
-    const float usableW = static_cast<float>(width) - 2.0f * kMargin;
-    const float usableH = static_cast<float>(height) - 2.0f * kMargin;
-    const float scale = std::min(usableW / spanX, usableH / spanY);
-    scaleOut = scale;
-
-    // 居中偏移：缩放后图形的实际占位
-    const float drawW = spanX * scale;
-    const float drawH = spanY * scale;
-    const float offsetX = (static_cast<float>(width) - drawW) * 0.5f;
-    const float offsetY = (static_cast<float>(height) - drawH) * 0.5f;
-
-    std::vector<Vec2> pixels;
-    pixels.reserve(world.size());
-    for (const Vec2& v : world) {
-        pixels.push_back(Vec2(offsetX + (v.x - minX) * scale,
-                              offsetY + (maxY - v.y) * scale));   // y 翻转
-    }
-    return pixels;
-}
-
 // 画背景 + 边界（动画前后保持一致的外观）
 void paintBackground(Canvas& canvas, const std::vector<Vec2>& pixels) {
     canvas.clear(kBackground);
@@ -358,15 +329,16 @@ int main(int argc, char** argv) {
         return kBadPolygon;
     }
 
-    // ---- 4. 世界坐标 → 像素坐标 ----
-    float scale = 1.0f;
-    const std::vector<Vec2> pixels = toPixelSpace(cleaned, opt.width, opt.height, scale);
+    // ---- 4. 世界坐标 → 像素坐标（View：按包围盒等比装入并居中，四边留 kMargin 像素）----
+    gfx::View view;
+    view.setViewport(opt.width, opt.height).fitPoints(cleaned, kMargin);
+    const std::vector<Vec2> pixels = view.worldToPixel(cleaned);
 
     // ---- 5. 终端摘要 ----
     std::cout << "顶点数：" << world.size() << "（规范化后 " << cleaned.size() << "）\n"
               << "顶点顺序：" << (worldArea > 0.0f ? "逆时针（符合要求）" : "顺时针（填充与方向无关，建议改为逆时针）")
               << "，世界坐标有向面积 " << worldArea << "\n"
-              << "画布：" << opt.width << "x" << opt.height << "，缩放系数 " << scale << "\n";
+              << "画布：" << opt.width << "x" << opt.height << "，缩放系数 " << view.scale() << "\n";
 
     // ---- 6. 渲染：窗口（可动画）与/或 PNG 输出 ----
     Canvas offscreen(opt.width, opt.height);

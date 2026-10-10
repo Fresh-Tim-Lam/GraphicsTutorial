@@ -25,6 +25,15 @@
 - [pixels-on-screen/](pixels-on-screen/README.md) —— 把第一个像素画到屏幕（Canvas + Window，第一个可见成果）。
 - [math-foundations/](math-foundations/README.md) —— 向量与矩阵：渲染的地基（gfx_math 使用与原理）。
 - [polygon-scan/](polygon-scan/README.md) —— 扫描线多边形填充：画线（Bresenham）+ 边表/活性边表填充 + 自写 PNG 输出（作业 1）。
+- [view-projection/](view-projection/README.md) —— 相机与视图：世界坐标 ↔ 像素坐标（`gfx::View`，2D 正交等比映射/contain + 3D 投影链路）。
+- [projection-3d/](projection-3d/README.md) —— 正交投影 vs 透视投影：3D 观察/投影/近平面裁剪（线框立方体左右同框对比）。
+- [triangle-raster/](triangle-raster/README.md) —— 三角形光栅化：采样判定 + top-left 边界规则 + 重心坐标 + 抗锯齿（覆盖率 / SSAA）+ 深度缓冲。
+- [euler-ops/](euler-ops/README.md) —— 半边数据结构（B-rep）+ 五个欧拉操作（MVFS/MEV/MEF/KEMR/KFMRH）：实体拓扑的逐步构造与校验。
+- [line-algorithms/](line-algorithms/README.md) —— 三种画直线算法对照（Naive / DDA / Bresenham）：每步运算量对照、并排成图 + 逐线段像素统计。
+- [ray-basics/](ray-basics/README.md) —— 光线求交地基（作业三）：主光线 + 球/三角形/圆柱/平面求交 + BVH，法向可视化（只用求交、不用光照）。
+- [ray-tracing/](ray-tracing/README.md) —— 光线跟踪：光照 + 反射/折射 + 阴影 + BVH + 超采样，用 gfx 自己渲染一张图；同目录还有**窗口交互版**（实时调相机）。
+- [ray-tracing-framework-scene/](ray-tracing-framework-scene/README.md) —— 用 gfx 复刻**课程框架（作业三）的原始场景**，与框架基准图做**逐像素等价性比对**。
+- [normal-mapping/](normal-mapping/README.md) —— 法线贴图：贴图采样 + 切空间 TBN + 程序化高度场，把光滑表面做出凹凸（并观察凹凸如何扭曲镜面反射）。
 
 ### 教学演示目标（CMake）
 
@@ -33,3 +42,12 @@
 | tutorial_pixels | 像素上屏演示（对角线+定点） | `cmake --build build --target tutorial_pixels` 后运行 `build/tutorials/tutorial_pixels` |
 | tutorial_math | 矩阵旋转/平移数学演示 | `cmake --build build --target tutorial_math` 后运行 `build/tutorials/tutorial_math` |
 | tutorial_polygon_fill | 多边形扫描转换（画线 + 扫描线填充 + PNG 输出 + 窗口动画），产物名 `PolygonFill` | `cmake --build build --target tutorial_polygon_fill` 后运行 `build/tutorials/PolygonFill --help` |
+| tutorial_projection_3d | 正交 vs 透视投影（线框立方体同框对比 + 近平面裁剪演示），产物名 `Projection3D` | `cmake --build build --target tutorial_projection_3d` 后运行 `build/tutorials/Projection3D --help` |
+| tutorial_triangle | 三角形光栅化（点采样 vs 覆盖率 AA vs SSAA 对比 + 乱序深度测试），产物名 `TriangleRaster` | `cmake --build build --target tutorial_triangle` 后运行 `build/tutorials/TriangleRaster --help` |
+| tutorial_euler | 欧拉操作（四面体连续构造 + KEMR 内环 + KFMRH 内环，逐步拓扑校验并渲染线框），产物名 `EulerOps` | `cmake --build build --target tutorial_euler` 后运行 `build/tutorials/EulerOps --help` |
+| tutorial_line_algorithms | 三种画直线算法对照（Naive / DDA / Bresenham 并排成图 + 逐线段像素统计），产物名 `LineAlgorithms` | `cmake --build build --target tutorial_line_algorithms` 后运行 `build/tutorials/LineAlgorithms --help` |
+| tutorial_ray_basics | 光线求交地基（主光线 + 球/三角形/圆柱/平面求交 + BVH，法向可视化、无光照），产物名 `RayBasics` | `cmake --build build --target tutorial_ray_basics` 后运行 `build/tutorials/RayBasics --help` |
+| tutorial_ray_tracing | 光线跟踪（光照 + 反射/折射 + 阴影 + BVH + 超采样，用 gfx 自己渲染），产物名 `RayTracing` | `cmake --build build --target tutorial_ray_tracing` 后运行 `build/tutorials/RayTracing --help` |
+| tutorial_ray_tracing_interactive | 光线跟踪**交互**演示：窗口内实时调相机（拖动转视角 / WASD 移动 / 滚轮推拉 / 空格出图），产物名 `RayTracingInteractive` | `cmake --build build --target tutorial_ray_tracing_interactive` 后运行 `build/tutorials/RayTracingInteractive` |
+| tutorial_normal_mapping | 法线贴图（对照组球 / 砖缝 / 波纹 + 棋格地面；程序化生成法线图 + TBN 扰动，含 A/B 对照），产物名 `NormalMapping` | `cmake --build build --target tutorial_normal_mapping` 后运行 `build/tutorials/NormalMapping --help` |
+| tutorial_hw3_scene | 复刻课程框架（作业三）原始场景并与框架基准图逐像素比对，产物名 `Hw3SceneTrace` | `cmake --build build --target tutorial_hw3_scene` 后运行 `build/tutorials/Hw3SceneTrace --help` |

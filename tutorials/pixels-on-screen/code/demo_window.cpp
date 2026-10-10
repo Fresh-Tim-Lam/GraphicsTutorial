@@ -4,9 +4,9 @@
 // 产物：build/tutorials/tutorial_pixels(.exe)
 // 行为：320x240 窗口内画一条对角线（红色），并持续保持直到关闭窗口。
 
-#include <gfx/canvas.hpp>
-#include <gfx/color.hpp>
-#include <gfx/window.hpp>
+#include <gfx/core/canvas.hpp>
+#include <gfx/core/color.hpp>
+#include <gfx/render/window.hpp>
 
 using gfx::Canvas;
 using gfx::Color;

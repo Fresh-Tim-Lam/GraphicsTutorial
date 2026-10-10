@@ -95,7 +95,7 @@ math::Transform<3> world = local;
 world.then(parent);                                     // 等价写法：world = local * parent
 ```
 
-**gfx 层（几何数据 apply 变换）**——见 [point.hpp](../../src/include/gfx/point.hpp)
+**gfx 层（几何数据 apply 变换）**——见 [point.hpp](../../src/include/gfx/geom/point.hpp)
 ```cpp
 gfx::Point2D q(1, 2);
 math::Vec2 r = q.translate(10, 0).rotate(pi / 2).value();   // 流畅链

@@ -2,7 +2,7 @@
 
 > **用途**：用"逐条扫描线求交、排序、成对填充"把多边形填成实心区域，并把过程可视化（逐行动画）。
 > **目标读者**：学完像素与变换、想理解"实心图形怎么来的"的读者；以及完成作业 1 的提交者。
-> **关联文档**：权威实现 [raster.hpp](../../src/include/gfx/raster.hpp)（画线 + 填充）、[png.hpp](../../src/include/gfx/png.hpp)（自写 PNG）；决策 [adr-0005](../../docs/design/adr-0005-raster-polygon-fill.md)（题目来源：课程发放的《作业 1：多边形扫描转换》，原题文件不随仓库分发）。
+> **关联文档**：权威实现 [raster.hpp](../../src/include/gfx/render/raster.hpp)（画线 + 填充）、[png.hpp](../../src/include/gfx/render/png.hpp)（自写 PNG）；决策 [adr-0005](../../docs/design/adr-0005-raster-polygon-fill.md)（题目来源：课程发放的《作业 1：多边形扫描转换》，原题文件不随仓库分发）。
 
 > 状态：生效中（2026-09-14）。对应作业 1：多边形扫描转换。
 
@@ -39,11 +39,11 @@
 
 | 能力 | 位置 |
 |------|------|
-| 画线（整数 Bresenham，八个卦限） | `gfx::drawLine` @ [raster.hpp](../../src/include/gfx/raster.hpp) |
+| 画线（整数 Bresenham，八个卦限） | `gfx::drawLine` @ [raster.hpp](../../src/include/gfx/render/raster.hpp) |
 | 画多边形轮廓（自动闭合） | `gfx::drawPolygonOutline` |
 | 扫描线填充（ET + AET，可逐行推进） | `gfx::ScanlineFiller` / `gfx::fillPolygon` |
 | 顶点规范化 / 有向面积 / 校验 | `gfx::normalizePolygon`、`gfx::polygonSignedArea`、`gfx::validatePolygon` |
-| PNG 输出（零第三方依赖） | `gfx::savePng` @ [png.hpp](../../src/include/gfx/png.hpp) |
+| PNG 输出（零第三方依赖） | `gfx::savePng` @ [png.hpp](../../src/include/gfx/render/png.hpp) |
 
 测试：`ctest -R test_raster`（含与"独立射线法实现"的逐像素对照）、`ctest -R test_png`。
 
@@ -138,7 +138,7 @@ build\tutorials\PolygonFill.exe --help
 
 | 目录 | 作用 |
 |------|------|
-| [code/](code/polygon_fill.cpp) | 命令行程序（权威实现在 [raster.hpp](../../src/include/gfx/raster.hpp)，此处为演示程序） |
+| [code/](code/polygon_fill.cpp) | 命令行程序（权威实现在 [raster.hpp](../../src/include/gfx/render/raster.hpp)，此处为演示程序） |
 | [data/](data/) | 样例输入（凸 / 凹 / 闭合点重复 / 三类非法） |
 | [output/](output/) | 教学用结果图 |
 | [submit/](submit/) | 提交包内文档与独立构建脚本（包内 README / 实验报告 / CMakeLists） |

@@ -138,10 +138,11 @@ Homework1/
 ├─ CMakeLists.txt         顶层构建入口
 ├─ app/polygon_fill.cpp   命令行程序（输入解析、坐标映射、窗口动画、PNG 输出）
 ├─ src/                   渲染库（权威实现）
-│   ├─ include/gfx/raster.hpp   画线 + 扫描线填充（ET/AET）★算法核心
-│   ├─ include/gfx/png.hpp      自写 PNG 编码器
-│   ├─ include/gfx/canvas.hpp   像素帧缓冲
-│   ├─ include/gfx/window.hpp + window_win32.cpp   Win32 窗口上屏
+│   ├─ include/gfx/render/raster.hpp   画线 + 扫描线填充（ET/AET）★算法核心
+│   ├─ include/gfx/render/png.hpp      自写 PNG 编码器
+│   ├─ include/gfx/render/view.hpp     相机/视图：世界坐标 → 像素坐标（等比装入 + 居中 + y 翻转）
+│   ├─ include/gfx/core/canvas.hpp     像素帧缓冲
+│   ├─ include/gfx/render/window.hpp + window_win32.cpp   Win32 窗口上屏
 │   └─ include/gfx/math/        向量/矩阵（由前期作业积累，本作业用其 Vec2）
 ├─ tests/                 单元测试（test_raster / test_png）
 ├─ data/                  测试输入（凸、凹、非法样例）

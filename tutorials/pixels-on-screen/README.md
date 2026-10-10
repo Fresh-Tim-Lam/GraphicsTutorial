@@ -2,7 +2,7 @@
 
 > **用途**：第一个可见成果——用 Canvas 在内存里逐像素画东西，再整帧显示到窗口。
 > **目标读者**：刚接触"图形如何上屏"的读者。
-> **关联文档**：权威实现 [canvas.hpp](../../src/include/gfx/canvas.hpp) 与 [window.hpp](../../src/include/gfx/window.hpp)；ADR [adr-0001](../../docs/design/adr-0001-gfx-math-canvas.md)。
+> **关联文档**：权威实现 [canvas.hpp](../../src/include/gfx/core/canvas.hpp) 与 [window.hpp](../../src/include/gfx/render/window.hpp)；ADR [adr-0001](../../docs/design/adr-0001-gfx-math-canvas.md)。
 
 > 状态：生效中（核验于 2026-09-09）。
 
@@ -24,7 +24,7 @@
 
 ## 权威实现
 
-`src/include/gfx/canvas.hpp`（纯内存帧缓冲，可离线测试）+ `src/window_win32.cpp`（Win32 GDI 上屏）。测试见 `ctest -R test_canvas`。
+`src/include/gfx/core/canvas.hpp`（纯内存帧缓冲，可离线测试）+ `src/window_win32.cpp`（Win32 GDI 上屏）。测试见 `ctest -R test_canvas`。
 
 ## code/（演示）
 

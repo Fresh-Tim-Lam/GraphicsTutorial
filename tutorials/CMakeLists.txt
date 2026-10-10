@@ -34,3 +34,89 @@ add_custom_command(TARGET tutorial_polygon_fill POST_BUILD
         $<TARGET_FILE:gfx>
         "$<TARGET_FILE_DIR:tutorial_polygon_fill>/"
     COMMENT "将 gfx.dll 拷贝到演示目录")
+
+# ---------- 正交投影 vs 透视投影演示（3D 线框，同框对比） ----------
+add_executable(tutorial_projection_3d projection-3d/code/projection_demo.cpp)
+target_link_libraries(tutorial_projection_3d PRIVATE gfx)
+set_target_properties(tutorial_projection_3d PROPERTIES OUTPUT_NAME Projection3D)
+
+add_custom_command(TARGET tutorial_projection_3d POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:gfx>
+        "$<TARGET_FILE_DIR:tutorial_projection_3d>/"
+    COMMENT "将 gfx.dll 拷贝到演示目录")
+
+# ---------- 三角形光栅化演示（点采样 vs 抗锯齿 + 深度测试） ----------
+add_executable(tutorial_triangle triangle-raster/code/triangle_demo.cpp)
+target_link_libraries(tutorial_triangle PRIVATE gfx)
+set_target_properties(tutorial_triangle PROPERTIES OUTPUT_NAME TriangleRaster)
+
+add_custom_command(TARGET tutorial_triangle POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:gfx>
+        "$<TARGET_FILE_DIR:tutorial_triangle>/"
+    COMMENT "将 gfx.dll 拷贝到演示目录")
+
+# ---------- 欧拉操作演示（半边结构：MVFS/MEV/MEF/KEMR/KFMRH） ----------
+add_executable(tutorial_euler euler-ops/code/euler_demo.cpp)
+target_link_libraries(tutorial_euler PRIVATE gfx)
+set_target_properties(tutorial_euler PROPERTIES OUTPUT_NAME EulerOps)
+
+add_custom_command(TARGET tutorial_euler POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:gfx>
+        "$<TARGET_FILE_DIR:tutorial_euler>/"
+    COMMENT "将 gfx.dll 拷贝到演示目录")
+
+# ---------- 欧拉操作交互演示（立方体掏空：单步 + 拖拽旋转 + 滚轮缩放） ----------
+add_executable(tutorial_euler_interactive euler-ops/code/euler_interactive.cpp)
+target_link_libraries(tutorial_euler_interactive PRIVATE gfx)
+set_target_properties(tutorial_euler_interactive PROPERTIES OUTPUT_NAME EulerInteractive)
+
+add_custom_command(TARGET tutorial_euler_interactive POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:gfx>
+        "$<TARGET_FILE_DIR:tutorial_euler_interactive>/"
+    COMMENT "将 gfx.dll 拷贝到演示目录")
+
+# ---------- 三种画直线算法对照（Naive / DDA / Bresenham：并排成图 + 像素统计） ----------
+add_executable(tutorial_line_algorithms line-algorithms/code/line_algorithms.cpp)
+target_link_libraries(tutorial_line_algorithms PRIVATE gfx)
+set_target_properties(tutorial_line_algorithms PROPERTIES OUTPUT_NAME LineAlgorithms)
+
+add_custom_command(TARGET tutorial_line_algorithms POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:gfx>
+        "$<TARGET_FILE_DIR:tutorial_line_algorithms>/"
+    COMMENT "将 gfx.dll 拷贝到演示目录")
+
+# ---------- 光线求交地基演示（法向可视化：只用求交 + BVH，无光照；纯头文件，无需 gfx.dll） ----------
+add_executable(tutorial_ray_basics ray-basics/code/ray_basics.cpp)
+target_link_libraries(tutorial_ray_basics PRIVATE gfx_math)
+set_target_properties(tutorial_ray_basics PROPERTIES OUTPUT_NAME RayBasics)
+
+# ---------- 光线跟踪演示（光照 + 反射/折射 + 阴影 + BVH + 超采样，用 gfx 自己渲染；纯头文件，无需 gfx.dll） ----------
+add_executable(tutorial_ray_tracing ray-tracing/code/ray_tracing.cpp)
+target_link_libraries(tutorial_ray_tracing PRIVATE gfx_math)
+set_target_properties(tutorial_ray_tracing PROPERTIES OUTPUT_NAME RayTracing)
+
+# ---------- 课程框架（作业三）原始场景的 gfx 等价性复刻（与框架基准图逐像素比对；纯头文件，无需 gfx.dll） ----------
+add_executable(tutorial_hw3_scene ray-tracing-framework-scene/code/hw3_scene_trace.cpp)
+target_link_libraries(tutorial_hw3_scene PRIVATE gfx_math)
+set_target_properties(tutorial_hw3_scene PROPERTIES OUTPUT_NAME Hw3SceneTrace)
+
+# ---------- 法线贴图演示（光线跟踪路径：Texture + TBN + 程序化法线图；纯头文件，无需 gfx.dll） ----------
+add_executable(tutorial_normal_mapping normal-mapping/code/normal_mapping.cpp)
+target_link_libraries(tutorial_normal_mapping PRIVATE gfx_math)
+set_target_properties(tutorial_normal_mapping PROPERTIES OUTPUT_NAME NormalMapping)
+
+# ---------- 光线跟踪交互演示（窗口内实时调相机：拖动 / WASD / 滚轮；需要 gfx.dll） ----------
+add_executable(tutorial_ray_tracing_interactive ray-tracing/code/ray_tracing_interactive.cpp)
+target_link_libraries(tutorial_ray_tracing_interactive PRIVATE gfx)
+set_target_properties(tutorial_ray_tracing_interactive PROPERTIES OUTPUT_NAME RayTracingInteractive)
+
+add_custom_command(TARGET tutorial_ray_tracing_interactive POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:gfx>
+        "$<TARGET_FILE_DIR:tutorial_ray_tracing_interactive>/"
+    COMMENT "将 gfx.dll 拷贝到演示目录")
