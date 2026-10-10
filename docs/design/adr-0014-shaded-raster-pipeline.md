@@ -22,8 +22,9 @@
 ### D2：顶点属性用**世界空间**；投影自算（不改 `View` 的公开 API）
 
 - `VertexAttributes` 的 `position` / `normal` / `tangent` 都是世界空间；投影用 `View::viewProjectionMatrix()`。
-- **需要裁剪空间 w**（透视校正的前提），而 `View::clipToPixel` 是私有的。本管线选择：自己按 `view.viewportX/Y/Width/Height()` 复刻同一套"裁剪空间 → 像素"映射（公式与 `View::clipToPixel` 逐字一致：透视除法 + 视口 + y 翻转），**而不是**为了内部需要给 `View` 开新公开 API。
+- **需要裁剪空间 w**（透视校正的前提），而 `View::clipToPixel` 原本是私有的。本管线当时选择：自己按 `view.viewportX/Y/Width/Height()` 复刻同一套"裁剪空间 → 像素"映射（公式与 `View::clipToPixel` 逐字一致：透视除法 + 视口 + y 翻转），**而不是**为了内部需要给 `View` 开新公开 API。
 - 理由：`View` 的公开面保持"单点投影 / 线段投影"这两个自然入口；着色管线的需要（拿 w）属于实现细节，复制 3 行映射比扩大公共 API 更划算（用测试锁定两处映射一致）。
+- ⚠️ **已被 [adr-0015](adr-0015-shadow-map.md) D2 部分推翻（2026-10-09）**：阴影贴图是第三个需要"带 w 的裁剪空间点"的使用方，于是改为把 `View::clipToPixel` **提为公开的唯一实现**，并删掉 `shading.hpp` 里的复刻。判据：同一段公式被两处复刻是可接受的实现细节，被三处复刻就是 API 缺失。
 
 ### D3：插值口径 —— 属性做**透视校正**，深度**不做**
 

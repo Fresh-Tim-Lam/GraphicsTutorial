@@ -76,3 +76,8 @@ add_test(NAME test_normalmap COMMAND test_normalmap)
 add_executable(test_shading test_shading.cpp)
 target_link_libraries(test_shading PRIVATE gfx_math)
 add_test(NAME test_shading COMMAND test_shading)
+
+# ---------- 阴影贴图测试（与解析求交一致、光源后方/视锥外、无自阴影 acne、PCF 量化） ----------
+add_executable(test_shadowmap test_shadowmap.cpp)
+target_link_libraries(test_shadowmap PRIVATE gfx_math)
+add_test(NAME test_shadowmap COMMAND test_shadowmap)

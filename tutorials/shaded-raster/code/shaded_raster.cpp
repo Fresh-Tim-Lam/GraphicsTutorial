@@ -9,10 +9,18 @@
 //       那边是"每像素一条光线求交"，这边是"三角形光栅化 + 属性插值"，
 //       也就是 GPU 里真正跑的那条路；同一份 Texture / TangentBasis / perturbNormal 两边通用。
 //
-// 用法：build/tutorials/ShadedRaster [--output <out.png>] [--size WxH] [--strength s] [--help]
+// 用法：build/tutorials/ShadedRaster [--output <out.png>] [--size WxH] [--strength s]
+//                                     [--no-shadow] [--compare] [--help]
 //   --strength s  凹凸强度（默认 1.0；0 = 贴图退化成平整法向）
+//   --no-shadow   关闭阴影贴图（A/B 对照）
+//   --compare     额外渲染一张"关闭阴影"的图并统计差异像素（默认关闭，约多花一倍时间）
 //
-// 关联：src/include/gfx/render/shading.hpp、texture.hpp、normalmap.hpp、lighting.hpp
+// 阴影：光栅化路径没有"场景求交"，阴影射线无从谈起 —— 这里改用**阴影贴图**（shadow map）：
+//       逐光源做一次"光源视角 + 只写深度"的 pass，主 pass 再把片元世界位置投回该视角比较深度。
+//       光源视角取**正交投影**（覆盖整个场景）⇒ 等价平行光近似，且正交下深度线性、精度均匀。
+//       见 gfx/render/shadowmap.hpp。
+//
+// 关联：src/include/gfx/render/shading.hpp、shadowmap.hpp、texture.hpp、normalmap.hpp、lighting.hpp
 
 #include <gfx/core/canvas.hpp>
 #include <gfx/core/color.hpp>
@@ -21,6 +29,7 @@
 #include <gfx/render/normalmap.hpp>
 #include <gfx/render/png.hpp>
 #include <gfx/render/shading.hpp>
+#include <gfx/render/shadowmap.hpp>
 #include <gfx/render/texture.hpp>
 #include <gfx/render/view.hpp>
 
@@ -177,21 +186,62 @@ Material makeMaterial(Vec3 diffuse, Vec3 specular, float shininess) {
     return m;
 }
 
+// 阴影贴图分辨率（正方形）：1024² 在"光源视角覆盖 20 世界单位"下约 0.02 世界单位/texel
+constexpr int kShadowSize = 1024;
+constexpr float kShadowExtent = 10.0f;   // 光源视角的正交半宽（覆盖 ±10 世界单位，留足余量）
+
+// 为**每个光源**建一张阴影贴图：光源视角取正交投影（覆盖整个场景）⇒ 等价"平行光"近似。
+// 正交投影的好处是深度随距离**线性**，精度均匀（透视阴影贴图近处精度过剩、远处不足）。
+// @note 场景在光源视角下的范围实测 x∈[−8.5, 8.5]、y∈[−6.2, 5.5]、深度∈[1.5, 13.8]，这里留余量取 ±10 / [0.1, 24]。
+std::vector<gfx::ShadowMap> buildShadowMaps(const std::vector<Part>& parts,
+                                            const std::vector<Light>& lights) {
+    std::vector<ShadingTriangle> all;
+    for (const Part& part : parts) {
+        all.insert(all.end(), part.triangles.begin(), part.triangles.end());
+    }
+
+    const float texelWorld = 2.0f * kShadowExtent / static_cast<float>(kShadowSize);
+
+    std::vector<gfx::ShadowMap> maps;
+    maps.reserve(lights.size());
+    for (const Light& light : lights) {
+        View lightView;
+        lightView.setViewport(kShadowSize, kShadowSize);
+        lightView.setOrthographic(-kShadowExtent, kShadowExtent, -kShadowExtent, kShadowExtent, 0.1f, 24.0f);
+        lightView.lookAt(light.position, Vec3(0.0f, -0.5f, 0.0f), Vec3(0.0f, 1.0f, 0.0f));
+
+        gfx::ShadowMap map;
+        map.configure(lightView, kShadowSize);
+        // 沿法向抬起 2 个 texel：平直面上抑制自阴影的主力；取值随 texel 尺度自动缩放。
+        // （斜率处的自阴影由 ShadowMap 的"斜率缩放容差"兜住，见 gfx/render/shadowmap.hpp）
+        map.setNormalOffset(2.0f * texelWorld);
+        map.build(all);   // 深度 pass：只写深度，颜色丢弃
+        maps.push_back(std::move(map));
+    }
+    return maps;
+}
+
 struct Options {
     std::string outputPath = "output/shaded-raster.png";
+    std::string comparePath = "output/shaded-raster-no-shadow.png";
     int width = 800;
     int height = 600;
     float strength = 1.0f;
+    bool shadow = true;
+    bool compare = false;
 };
 
 void printUsage() {
     std::cout <<
         "用法：\n"
-        "  ShadedRaster [--output <out.png>] [--size WxH] [--strength s] [--help]\n"
+        "  ShadedRaster [--output <out.png>] [--size WxH] [--strength s] [--no-shadow]\n"
+        "               [--compare] [--help]\n"
         "\n"
         "  --output <file>  结果 PNG 路径（默认 output/shaded-raster.png，父目录自动创建）\n"
         "  --size WxH       画布尺寸（默认 800x600）\n"
         "  --strength s     凹凸强度（默认 1.0；0 = 贴图退化为平整法向）\n"
+        "  --no-shadow      关闭阴影贴图（A/B 对照）\n"
+        "  --compare        额外渲染一张关闭阴影的图并统计差异像素（默认关闭）\n"
         "  --help           显示本帮助\n";
 }
 
@@ -200,6 +250,8 @@ bool parseArgs(int argc, char** argv, Options& opt, int& exitCode) {
         const std::string arg = argv[i];
         if (arg == "--help" || arg == "-h") { printUsage(); exitCode = 0; return false; }
         if (arg == "--output" && i + 1 < argc) { opt.outputPath = argv[++i]; }
+        else if (arg == "--no-shadow") { opt.shadow = false; }
+        else if (arg == "--compare") { opt.compare = true; }
         else if (arg == "--strength" && i + 1 < argc) { opt.strength = static_cast<float>(std::atof(argv[++i])); }
         else if (arg == "--size" && i + 1 < argc) {
             const std::string size = argv[++i];
@@ -269,60 +321,137 @@ int main(int argc, char** argv) {
 
     Canvas canvas(opt.width, opt.height);
     canvas.clear(Color(24, 28, 38));
-    DepthBuffer depth(opt.width, opt.height);
+
+    long long triangleCount = 0;
+    for (const Part& part : parts) triangleCount += static_cast<long long>(part.triangles.size());
 
     std::cout << "光栅化着色管线演示（顶点属性 → 透视校正插值 → 逐像素着色）\n"
                  "  分辨率        : " << opt.width << "x" << opt.height << "\n"
               << "  凹凸强度      : " << opt.strength << "\n"
               << "  场景          : 地面(棋格) + 立方体(砖缝) + 球(波纹)，全部由三角形拼出\n"
-              << "  片元着色      : 采样法线贴图 → TBN 扰动 → shadeLocal(Blinn-Phong) + gamma\n";
+              << "  片元着色      : 采样法线贴图 → TBN 扰动 → shadeLocal(Blinn-Phong) + gamma\n"
+              << "  阴影          : " << (opt.shadow
+                     ? "逐光源一张 " + std::to_string(kShadowSize) + "² 阴影贴图（正交光源视角 + 法向偏移 + 斜率缩放容差 + PCF 3×3）"
+                     : std::string("已用 --no-shadow 关闭"))
+              << "\n";
+
+    // 渲染一遍：useShadow 决定是否建阴影贴图（每张图都要把全部三角形再过一遍深度 pass）
+    auto renderOnce = [&](Canvas& target, bool useShadow) -> long long {
+        const std::vector<gfx::ShadowMap> maps =
+            useShadow ? buildShadowMaps(parts, lights) : std::vector<gfx::ShadowMap>();
+        DepthBuffer depth(target.width(), target.height());
+
+        long long fragments = 0;
+        for (const Part& part : parts) {
+            const Texture* map = part.normalMap;
+            const Material& material = part.material;
+            for (const ShadingTriangle& tri : part.triangles) {
+                gfx::fillTriangleShaded(target, view, tri, [&](const Fragment& f) -> Vec3 {
+                    ++fragments;
+                    Vec3 normal = f.normal;
+                    if (map != nullptr && gfx::math::dot(f.tangent, f.tangent) > 0.0f) {
+                        // 用插值后的法向/切线重建正交基（插值会让它们不再严格正交）
+                        TangentBasis basis;
+                        if (gfx::math::normalize(normal, basis.normal)) {
+                            basis.tangent = gfx::orthogonalize(f.tangent, basis.normal, Vec3(1.0f, 0.0f, 0.0f));
+                            basis.bitangent = gfx::math::cross(basis.normal, basis.tangent);
+                            normal = gfx::perturbNormal(basis, gfx::decodeNormal(map->sample(f.uv.x, f.uv.y)));
+                        }
+                    } else {
+                        gfx::math::normalize(normal, normal);
+                    }
+
+                    Vec3 viewDir;
+                    if (!gfx::math::normalize(eye - f.position, viewDir)) viewDir = Vec3(0.0f, 0.0f, 1.0f);
+
+                    const Vec3 linear = gfx::shadeLocal(
+                        f.position, normal, viewDir, material, lights,
+                        [&](const Vec3& p, const Vec3& dirToLight, float) {
+                            // 一张贴图只服务一个光源：按"到光源的方向"判断当前循环到哪个光源，
+                            // 取它那张贴图做深度比较（用**着色法向**偏移，能一并压掉凹凸引起的自阴影）。
+                            int best = -1;
+                            float bestDot = -2.0f;
+                            for (std::size_t i = 0; i < maps.size(); ++i) {
+                                Vec3 dir;
+                                if (!gfx::math::normalize(lights[i].position - p, dir)) continue;
+                                const float dp = gfx::math::dot(dir, dirToLight);
+                                if (dp > bestDot) { bestDot = dp; best = static_cast<int>(i); }
+                            }
+                            return best >= 0 && maps[static_cast<std::size_t>(best)].isShadowed(p, normal);
+                        });
+
+                    // 输出前做伽马（shading.hpp 负责 0..1 → 8bit 量化，不做色彩空间变换）
+                    return Vec3(std::pow(std::max(0.0f, linear.x), 1.0f / 2.2f),
+                                std::pow(std::max(0.0f, linear.y), 1.0f / 2.2f),
+                                std::pow(std::max(0.0f, linear.z), 1.0f / 2.2f));
+                }, &depth);
+            }
+        }
+        return fragments;
+    };
 
     // ---- 逐部件逐三角形：光栅化 + 深度测试 + 片元着色 ----
-    long long fragments = 0;
-    long long triangles = 0;
-    for (const Part& part : parts) {
-        const Texture* map = part.normalMap;
-        const Material& material = part.material;
-        for (const ShadingTriangle& tri : part.triangles) {
-            ++triangles;
-            gfx::fillTriangleShaded(canvas, view, tri, [&](const Fragment& f) -> Vec3 {
-                ++fragments;
-                Vec3 normal = f.normal;
-                if (map != nullptr && gfx::math::dot(f.tangent, f.tangent) > 0.0f) {
-                    // 用插值后的法向/切线重建正交基（插值会让它们不再严格正交）
-                    TangentBasis basis;
-                    if (gfx::math::normalize(normal, basis.normal)) {
-                        basis.tangent = gfx::orthogonalize(f.tangent, basis.normal, Vec3(1.0f, 0.0f, 0.0f));
-                        basis.bitangent = gfx::math::cross(basis.normal, basis.tangent);
-                        normal = gfx::perturbNormal(basis, gfx::decodeNormal(map->sample(f.uv.x, f.uv.y)));
-                    }
-                } else {
-                    gfx::math::normalize(normal, normal);
-                }
-
-                Vec3 viewDir;
-                if (!gfx::math::normalize(eye - f.position, viewDir)) viewDir = Vec3(0.0f, 0.0f, 1.0f);
-
-                // 光栅化路径没有场景求交 ⇒ 阴影测试恒为"不遮挡"
-                const Vec3 linear = gfx::shadeLocal(
-                    f.position, normal, viewDir, material, lights,
-                    [](const Vec3&, const Vec3&, float) { return false; });
-
-                // 输出前做伽马（shading.hpp 负责 0..1 → 8bit 量化，不做色彩空间变换）
-                return Vec3(std::pow(std::max(0.0f, linear.x), 1.0f / 2.2f),
-                            std::pow(std::max(0.0f, linear.y), 1.0f / 2.2f),
-                            std::pow(std::max(0.0f, linear.z), 1.0f / 2.2f));
-            }, &depth);
-        }
-    }
+    const long long fragments = renderOnce(canvas, opt.shadow);
 
     std::string error;
     if (!gfx::savePng(canvas, opt.outputPath.c_str(), &error)) {
         std::cerr << "错误：保存 PNG 失败 —— " << error << "\n";
         return 4;
     }
-    std::cout << "  三角形数      : " << triangles << "\n"
+    std::cout << "  三角形数      : " << triangleCount << "\n"
                  "  着色片元数    : " << fragments << "\n"
                  "  输出          : " << opt.outputPath << "\n";
+
+    // A/B 对照：再渲一张"关掉阴影"的，统计差异像素（阴影只影响受遮挡处，差异应集中在影子区域）
+    if (opt.compare) {
+        Canvas plainCanvas(opt.width, opt.height);
+        plainCanvas.clear(Color(24, 28, 38));
+        renderOnce(plainCanvas, /*useShadow=*/false);
+
+        long long diff = 0;
+        long long maxDiff = 0;
+        long long sumDiff = 0;
+        const long long pixels = static_cast<long long>(opt.width) * opt.height;
+        const auto indexAt = [&](int x, int y) { return static_cast<std::size_t>(y) * opt.width + x; };
+        std::vector<unsigned char> mask(static_cast<std::size_t>(pixels), 0);
+        for (int y = 0; y < opt.height; ++y) {
+            for (int x = 0; x < opt.width; ++x) {
+                const Color a = canvas.pixelAt(x, y);
+                const Color b = plainCanvas.pixelAt(x, y);
+                const int d = std::max({std::abs(int(a.r) - int(b.r)), std::abs(int(a.g) - int(b.g)),
+                                        std::abs(int(a.b) - int(b.b))});
+                if (d > 0) { mask[indexAt(x, y)] = 1; ++diff; }
+                if (d > maxDiff) maxDiff = d;
+                sumDiff += d;
+            }
+        }
+
+        // "椒盐像素"：差异像素中 4 邻域都无差异的那些 —— 自阴影 acne 的典型形态。
+        // 实体阴影区里每个差异像素必然与邻居同属差异区，故这个数字直接反映自阴影噪点的多少。
+        long long speckle = 0;
+        for (int y = 0; y < opt.height; ++y) {
+            for (int x = 0; x < opt.width; ++x) {
+                if (mask[indexAt(x, y)] == 0) continue;
+                const bool adjacent =
+                    (x > 0 && mask[indexAt(x - 1, y)] != 0) ||
+                    (x + 1 < opt.width && mask[indexAt(x + 1, y)] != 0) ||
+                    (y > 0 && mask[indexAt(x, y - 1)] != 0) ||
+                    (y + 1 < opt.height && mask[indexAt(x, y + 1)] != 0);
+                if (!adjacent) ++speckle;
+            }
+        }
+
+        std::cout << "  对照（关闭阴影）: "
+                  << diff << " / " << pixels << " 个像素不同（占 "
+                  << (100.0 * static_cast<double>(diff) / static_cast<double>(pixels)) << "%）"
+                     "，最大通道差 " << maxDiff
+                  << "，平均差 " << (static_cast<double>(sumDiff) / static_cast<double>(pixels)) << "\n"
+                  << "  自阴影椒盐像素: " << speckle << "（占画面 "
+                  << (100.0 * static_cast<double>(speckle) / static_cast<double>(pixels)) << "%）\n";
+        std::string plainError;
+        gfx::savePng(plainCanvas, opt.comparePath.c_str(), &plainError);
+        std::cout << "  对照图输出    : " << opt.comparePath << "\n";
+    }
+
     return 0;
 }

@@ -40,7 +40,8 @@ src/
 │   │   ├─ raytracer.hpp   # 递归光线跟踪：SurfaceHit（几何 + 材质指针 + 可选着色法向）+ RayTracer（trace 递归：法向定向/偏移/阴影/镜面反射/规则透射/全反射/深度；render 出图：子像素中心超采样 + 可选伽马；求交由**回调**注入解耦），ADR-0012
 │   │   ├─ texture.hpp     # 纹理：WrapMode（Repeat/Clamp/Mirror）+ TextureFilter（Nearest/Bilinear）+ Texture（内存 RGB 贴图 + 归一化 uv 采样），与渲染路径无关，ADR-0013
 │   │   ├─ normalmap.hpp   # 法线贴图：TangentBasis + decodeNormal/perturbNormal + 球/平面解析切空间 + makeNormalMap（高度场→法线图，内置棋格/砖缝/波纹），ADR-0013
-│   │   └─ shading.hpp     # 光栅化着色管线：VertexAttributes/Fragment/FragmentShader + fillTriangleShaded（透视校正插值 + 近平面裁剪 + 逐像素着色回调；复用 triangle/depth/time 件），ADR-0014
+│   │   ├─ shading.hpp     # 光栅化着色管线：VertexAttributes/Fragment/FragmentShader + fillTriangleShaded（透视校正插值 + 近平面裁剪 + 逐像素着色回调；复用 triangle/depth/time 件），ADR-0014
+│   │   └─ shadowmap.hpp   # 阴影贴图：ShadowMap（光源视角只写深度的 pass + 主 pass 深度比较；法向偏移 + 斜率缩放容差治自阴影，PCF 软化），ADR-0015
 │   └─ math/               # 数学基础层（gfx_math 头文件子库，5 个头，零平台依赖）
 │       ├─ vec.hpp                # Vec<N> 模板 + 别名 vec2/vec3/vec4；齐次归一化 fromHomogeneous；光线追踪向量运算 reflect/refract（ADR-0002/0007/0011）
 │       ├─ mat.hpp                # Mat<N> 模板 + 别名 mat2/3/4；算法收敛 math::detail；向量变换 applyVector + 仿射拆解 translationOf/linearPartOf/isAffine（ADR-0007）

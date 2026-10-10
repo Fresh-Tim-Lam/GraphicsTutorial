@@ -45,6 +45,7 @@ add_library(gfx SHARED
     include/gfx/render/texture.hpp
     include/gfx/render/normalmap.hpp
     include/gfx/render/shading.hpp
+    include/gfx/render/shadowmap.hpp
     window_win32.cpp)
 
 target_include_directories(gfx

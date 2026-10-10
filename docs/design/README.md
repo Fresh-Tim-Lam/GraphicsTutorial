@@ -24,3 +24,4 @@
 | [adr-0012-raytracing-lighting.md](adr-0012-raytracing-lighting.md) | 光照模型与递归光线跟踪（作业三再沉淀）：`Material`/`Light`/`shadeLocal`（局部光照 + 阴影回调）+ `SurfaceHit`/`RayTracer`（反射/折射/递归/超采样/伽马）；求交与阴影均以**回调**与场景解耦，落 `render/`（单向依赖 `geom/`）（✅ 采纳 2026-10-09） |
 | [adr-0013-normal-mapping.md](adr-0013-normal-mapping.md) | 纹理与法线贴图：`Texture`（环绕/滤波采样）与 `TangentBasis`/`perturbNormal`/`makeNormalMap`（高度场→法线图）分两层落 `render/`；切空间用解析解；经 `SurfaceHit::shadingNormal` 注入（**几何法向管光线数学、着色法向管光照**），为将来光栅化着色管线预留复用（✅ 采纳 2026-10-09） |
 | [adr-0014-shaded-raster-pipeline.md](adr-0014-shaded-raster-pipeline.md) | 光栅化着色管线：`VertexAttributes`/`Fragment`/`FragmentShader`/`fillTriangleShaded` —— 顶点属性 + **透视校正插值** + 近平面裁剪 + 逐像素着色（着色以**回调**注入，与光照解耦）；兑现 ADR-0013 的复用（纹理/法线贴图在光栅化路径上原样可用）（✅ 采纳 2026-10-09） |
+| [adr-0015-shadow-map.md](adr-0015-shadow-map.md) | 光栅化路径的阴影（阴影贴图）：光源视角只写深度的 pass（**复用 ADR-0014 的管线**）+ 主 pass 深度比较；光源视角取**正交**（平行光近似）；自阴影用"法向偏移 + **斜率缩放**深度容差"两道防线压掉；PCF 3×3 软化；一张贴图服务一个光源（✅ 采纳 2026-10-09） |

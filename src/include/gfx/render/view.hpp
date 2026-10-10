@@ -84,15 +84,6 @@ struct ViewFrustum {
 //   gfx::fillPolygon(canvas, pixels, color);        // 交给光栅层按像素坐标绘制
 class View {
 private:
-    // 裁剪空间 → 像素坐标（透视除法 + NDC → 视口 + 视口原点偏移 + y 翻转）
-    math::Vec2 clipToPixel(const math::Vec4& clip) const {
-        const float invW = 1.0f / clip.w;
-        const float ox = static_cast<float>(viewportX_);
-        const float oy = static_cast<float>(viewportY_);
-        return math::Vec2(ox + (clip.x * invW * 0.5f + 0.5f) * static_cast<float>(viewportW_),
-                          oy + (1.0f - (clip.y * invW * 0.5f + 0.5f)) * static_cast<float>(viewportH_));
-    }
-
     // 把 p 沿线段 q→p 裁到 w == nearPlaneW_ 处（前置：q.w ≥ nearPlaneW_ > p.w ⇒ 交点必在 q→p 之间）
     math::Vec4 clipToNearPlane(const math::Vec4& q, const math::Vec4& p) const {
         const float t = (nearPlaneW_ - q.w) / (p.w - q.w);
@@ -359,11 +350,31 @@ public:
     // 观察矩阵（世界 → 相机；默认单位矩阵 = 相机在原点看向 −z）
     const math::Mat4& viewMatrix() const { return view_; }
 
+    // 相机在世界空间的**视线方向**（单位矢量：从 eye 指向 target）。
+    // @note 观察矩阵第 3 行存的是 −视线（lookAt 把 −f 写进去），取负即得 f；与投影无关。
+    //       默认视图（单位矩阵）给出 (0, 0, −1)，即"看向 −z"，与 viewMatrix 的语义一致。
+    // @note 用途：需要"光/相机方向"的世界空间矢量的调用方（如阴影贴图的光源方向）。
+    math::Vec3 forward() const {
+        return math::Vec3(-view_(2, 0), -view_(2, 1), -view_(2, 2));
+    }
+
     // 投影矩阵（相机 → 裁剪空间；默认单位矩阵）
     const math::Mat4& projectionMatrix() const { return projection_; }
 
     // 组合矩阵：**投影 × 观察**（Mat 约定 A * B = 先作用 B ⇒ 先把世界点变到相机空间，再投影）
     math::Mat4 viewProjectionMatrix() const { return projection_ * view_; }
+
+    // 裁剪空间 → 像素坐标（透视除法 + NDC → 视口 + 视口原点偏移 + y 翻转）。
+    // @note 公开的理由：**需要齐次 w** 的调用方（光栅化着色管线的透视校正、阴影贴图的深度比较）
+    //       必须先自己乘出裁剪空间点再映射，公开这一层比让各处复刻同一套映射公式更可靠。
+    // @note 调用方需保证 clip.w > 0（相机后方/近平面外的点应先裁剪）。
+    math::Vec2 clipToPixel(const math::Vec4& clip) const {
+        const float invW = 1.0f / clip.w;
+        const float ox = static_cast<float>(viewportX_);
+        const float oy = static_cast<float>(viewportY_);
+        return math::Vec2(ox + (clip.x * invW * 0.5f + 0.5f) * static_cast<float>(viewportW_),
+                          oy + (1.0f - (clip.y * invW * 0.5f + 0.5f)) * static_cast<float>(viewportH_));
+    }
 
     // 把世界点经 view × projection 投影到**像素坐标**（NDC → 视口，含 y 翻转）。
     // @note **不做裁剪**——单点无从裁起：点位于相机后方（齐次 w ≤ 0）时结果无定义（会镜像）。

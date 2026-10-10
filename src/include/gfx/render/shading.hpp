@@ -85,15 +85,6 @@ inline Color shadingToColor(const math::Vec3& c) {
     return Color(shadingChannelToByte(c.x), shadingChannelToByte(c.y), shadingChannelToByte(c.z));
 }
 
-// 裁剪空间 → 像素坐标（公式与 View::clipToPixel 一致：透视除法 + 视口映射 + y 翻转）
-inline math::Vec2 clipToPixel(const View& view, const math::Vec4& clip) {
-    const float invW = 1.0f / clip.w;
-    const float ox = static_cast<float>(view.viewportX());
-    const float oy = static_cast<float>(view.viewportY());
-    return math::Vec2(ox + (clip.x * invW * 0.5f + 0.5f) * static_cast<float>(view.viewportWidth()),
-                      oy + (1.0f - (clip.y * invW * 0.5f + 0.5f)) * static_cast<float>(view.viewportHeight()));
-}
-
 // 裁剪空间顶点（clip 是齐次坐标，其 w 就是视图深度）
 struct ClipVertex {
     math::Vec4 clip;
@@ -139,9 +130,9 @@ inline int clipTriangleToNearPlane(const ClipVertex in[3], float wMin, ClipVerte
 inline bool rasterizeClipTriangle(Canvas& canvas, const View& view,
                                   const ClipVertex& c0, const ClipVertex& c1, const ClipVertex& c2,
                                   const FragmentShader& shader, DepthBuffer* depth) {
-    const math::Vec2 p0 = clipToPixel(view, c0.clip);
-    const math::Vec2 p1 = clipToPixel(view, c1.clip);
-    const math::Vec2 p2 = clipToPixel(view, c2.clip);
+    const math::Vec2 p0 = view.clipToPixel(c0.clip);
+    const math::Vec2 p1 = view.clipToPixel(c1.clip);
+    const math::Vec2 p2 = view.clipToPixel(c2.clip);
     if (edgeFunction(p0, p1, p2) == 0.0f) return false;   // 退化（零面积）
 
     // 屏幕空间包围盒（与 triangle.hpp 一致：floor(min) .. ceil(max)，末端开区间）
