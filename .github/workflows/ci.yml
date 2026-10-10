@@ -1,0 +1,50 @@
+# ci.yml —— push / PR 自动构建 + 跑全部测试
+#
+# 为什么用 MSYS2 的 MinGW-w64 而不是 MSVC：本项目的开发与交付环境就是 MinGW-w64 + Ninja
+# （gfx 是无条件编 window_win32.cpp 的 Win32 GDI 实现，且交付物用 MinGW 静态链接），
+# 用同一套工具链跑 CI 结果最可信。
+#
+# 本地等价命令：
+#   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+#   cmake --build build
+#   ctest --test-dir build --output-on-failure
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: 构建 + 测试（MinGW-w64 / Ninja / Release）
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备工具链（MSYS2 + MinGW-w64）
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+
+      - name: 配置（Release）
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: 构建
+        run: cmake --build build
+
+      - name: 跑全部测试
+        run: ctest --test-dir build --output-on-failure
