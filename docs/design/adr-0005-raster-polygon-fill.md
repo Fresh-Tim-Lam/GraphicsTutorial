@@ -2,9 +2,9 @@
 
 > **用途**：记录"在像素画布之上如何做图元光栅化"的机制决策：实现落位、采样规则、ET/AET 结构、输入校验、图像输出方式，以及配套演示程序的形态。
 > **目标读者**：维护 gfx 光栅化能力、实现更复杂图元/填充规则（多轮廓、抗锯齿）、或接入图像输出的人与 AI Agent。
-> **关联文档**：[adr-0001](adr-0001-gfx-math-canvas.md)（Canvas/Window）；[adr-0004](adr-0004-transform-chain.md)（几何层）；实现 [raster.hpp](../../src/include/gfx/raster.hpp)、[png.hpp](../../src/include/gfx/png.hpp)；教学主题 [polygon-scan](../../tutorials/polygon-scan/README.md)。题目来源：课程发放的《作业 1：多边形扫描转换》（原题文件不随仓库分发）。
+> **关联文档**：[adr-0001](adr-0001-gfx-math-canvas.md)（Canvas/Window）；[adr-0004](adr-0004-transform-chain.md)（几何层）；实现 [raster.hpp](../../src/include/gfx/render/raster.hpp)、[png.hpp](../../src/include/gfx/render/png.hpp)；教学主题 [polygon-scan](../../tutorials/polygon-scan/README.md)。题目来源：课程发放的《作业 1：多边形扫描转换》（原题文件不随仓库分发）。
 
-> **状态**：✅ 采纳（2026-09-14）。本 ADR 落地：`gfx::drawLine` / `drawPolygonOutline` / `ScanlineFiller` / `fillPolygon` / `validatePolygon` 与 `gfx::savePng`，及演示程序 `PolygonFill`。
+> **状态**：✅ 采纳（2026-09-14）。本 ADR 落地：`gfx::drawLine` / `drawPolygonOutline` / `ScanlineFiller` / `fillPolygon` / `validatePolygon` 与 `gfx::savePng`，及演示程序 `PolygonFill`。2026-09-16 补充：画线新增**浮点端点入口**（D2）。
 
 ## 背景
 
@@ -17,15 +17,19 @@
 
 ### D1：光栅化能力进 `src/`，以头文件实现；演示程序落 `tutorials/`
 
-- `src/include/gfx/raster.hpp`：画线 + 多边形填充 + 顶点校验（纯内存、无平台依赖）。
-- `src/include/gfx/png.hpp`：PNG 输出（唯一涉及文件 I/O 的部分）。
+- `src/include/gfx/render/raster.hpp`：画线 + 多边形填充 + 顶点校验（纯内存、无平台依赖）。
+- `src/include/gfx/render/png.hpp`：PNG 输出（唯一涉及文件 I/O 的部分）。
 - `tutorials/polygon-scan/`：教学讲解 + `code/polygon_fill.cpp`（命令行程序，产物名 `PolygonFill`）+ `data/` 样例。
 - 理由：算法是"从 0 造轮子"项目的核心资产（课堂作业只是它的第一个消费者），故属 `src/`；输入解析、世界→像素映射、窗口展示属演示职责，故属 `tutorials/`。头文件实现使其可**离屏测试**（不依赖窗口/图形环境），与 `Canvas` 一致。
 
-### D2：画线用整数 Bresenham（中点法）
+### D2：画线两条入口，落点口径一致
 
-- 单函数覆盖八个卦限（由误差项 `e2` 的两个判断决定走 x / y / 斜步），全程整数、无除法、无浮点。
-- 轮廓落点用**最近像素**（`std::lround`）；填充用**像素中心采样**（见 D4）。两者在边界最多相差 1 像素，故约定**先填充、后画轮廓**，让边界覆盖在上层。
+- **整数端点**：整数 Bresenham（中点法）—— 单函数覆盖八个卦限（由误差项 `e2` 的两个判断决定走 x / y / 斜步），全程整数、无除法、无浮点。
+- **浮点端点**（2026-09-16 补充）：`drawLine(Canvas&, const math::Vec2& a, const math::Vec2& b, Color)` —— 浮点步进（DDA），**不提前取整端点**，保留亚像素。
+  - 动机：应用侧的几何端点几乎总是浮点（`View` 映射出的像素坐标也是浮点）。若先取整，误差不止 0.5 像素——误差项从**取整后**的端点重算，会让阶梯**整体错位**：实测 `(0.0,0.4) → (100.0,10.4)` 与"不取整"结果差 **56.7%** 像素（整数路径整条阶梯偏一行），短线上则表现为多画/少画一格。
+  - 落点口径与整数版**一致**（都是"最近像素"、硬边、无抗锯齿）；在**整数端点**输入下与整数版**逐像素一致**（测试锁定）⇒ 替换安全、不破坏既有输出。
+  - 入参为 `math::Vec2` ⇒ 可**直接传几何层的 `gfx::Point2D`**（其 `operator math::Vec2()` 返回**变换后**的坐标）。
+- 轮廓落点：`drawPolygonOutline` 目前仍走整数版（先 `lround`，见"待细化"）；填充用**像素中心采样**（见 D4）。两者在边界最多相差 1 像素，故约定**先填充、后画轮廓**，让边界覆盖在上层。
 
 ### D3：填充 = 扫描线 + 显式 ET/AET，并提供逐扫描线推进接口
 
@@ -69,19 +73,20 @@
 
 ## 后果
 
-- 新增公共 API：`gfx::drawLine`、`drawPolygonOutline`、`Span`、`PolygonError`/`polygonErrorText`、`normalizePolygon`、`polygonSignedArea`、`validatePolygon`、`ScanlineFiller`、`fillPolygon`、`savePng`。
+- 新增公共 API：`gfx::drawLine`（整数端点）、`drawLine`（浮点端点 `Vec2`，2026-09-16 补充）、`drawPolygonOutline`、`Span`、`PolygonError`/`polygonErrorText`、`normalizePolygon`、`polygonSignedArea`、`validatePolygon`、`ScanlineFiller`、`fillPolygon`、`savePng`。
 - 新增构建目标：`tutorial_polygon_fill`（产物 `PolygonFill`）；新增测试 `test_raster`、`test_png`（总计 8 项测试通过）。
 - `Canvas` 无需改动（填充只调用 `putPixel`），保持"越界忽略"的裁剪策略。
 - 填充与顶点环绕方向无关（奇偶规则）；程序仅在终端提示"顺时针/逆时针"。
 
 ## 验证（可复现）
 
-- 单元测试 `ctest -R test_raster`（65 checks）：画线八方向；轴对齐矩形精确区间；**凸/凹/星形与独立射线法实现逐像素一致（漏填 0、多填 0）**；菱形单峰行长（验证共享顶点/极值点不重复计数）；闭合点/相邻重合点；逐行推进与一次性填充结果一致；四类非法输入；薄于 1 像素的退化输入。
+- 单元测试 `ctest -R test_raster`（86 checks）：画线八方向；**浮点端点画线**（整数端点下与整数版逐像素一致（8 组）；亚像素端点保留精度、阶梯不错位：`(0.4,0.3)→(2.6,1.7)` 只画 3 格而整数版多画 1 格，`(0.0,0.4)→(100.0,10.4)` 在行 1 而非行 0；同一像素内退化为一点；`gfx::Point2D` 直传取**变换后**坐标）；轴对齐矩形精确区间；**凸/凹/星形与独立射线法实现逐像素一致（漏填 0、多填 0）**；菱形单峰行长（验证共享顶点/极值点不重复计数）；闭合点/相邻重合点；逐行推进与一次性填充结果一致；四类非法输入；薄于 1 像素的退化输入。
 - 单元测试 `ctest -R test_png`（31 checks）：CRC-32 / Adler-32 标准向量、IHDR 字段、全文件逐块 CRC 重算。
 - 端到端：`PolygonFill` 生成的结果图用 Python `zlib` 独立解码后，**CRC 全部通过、像素与写入一致**；填充像素数与解析值（世界面积 × 缩放²）偏差 -0.35%（凸五边形）/ -1.03%（凹箭头），差值即被边界覆盖的像素。
 
 ## 待细化
 
+- **`drawPolygonOutline` 是否改走浮点端点版**：目前仍"端点先 `lround` + 整数 Bresenham"。改走浮点版会让轮廓更贴近几何真值，但**会改变现有结果图**（需重新验证 + 重出提交包），故留待确认。
 - **多轮廓/带孔多边形**：把多个轮廓的边统一进 ET/AET，支持奇偶规则与非零绕组规则的比较（对应作业提高题）。
 - **边界抗锯齿**：按覆盖率着色（需要 alpha 混合与 `Canvas` 支持 alpha 写入）。
 - **填充规模的性能路径**：目前是"每行求交 + 逐像素 `putPixel`"；若用于大面积实时填充，可考虑按行 `memcpy`/span 级写入与批量后端。

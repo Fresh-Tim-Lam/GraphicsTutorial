@@ -9,7 +9,7 @@ project(GraphicsTutorial LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 版本号唯一事实源：src/gfx/version.hpp（随首个模块创建，禁止在此硬编码）
+# 版本号唯一事实源：src/include/gfx/core/version.hpp（随首个模块创建，禁止在此硬编码）
 # 版本策略见 docs/conventions/version.md
 
 # 主渲染库 gfx（动态库 + 头文件分发）

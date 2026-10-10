@@ -14,7 +14,7 @@
 #ifndef GFX_MATH_MAT_HPP
 #define GFX_MATH_MAT_HPP
 
-#include "vec.hpp"
+#include "gfx/math/vec.hpp"
 
 #include <cstddef>
 #include <initializer_list>
@@ -166,6 +166,49 @@ inline Vec<N> operator*(const Mat<N>& m, const Vec<N>& v) {
 using Mat2 = Mat<2>;
 using Mat3 = Mat<3>;
 using Mat4 = Mat<4>;
+
+// ---- 向量变换 / 仿射矩阵拆解（诊断与元信息） ----
+
+// 向量变换（齐次 w = 0）：只作用矩阵的**线性部分**，**忽略平移列**。
+// @note 与点变换区分：点写作 w = 1（`m * Vec3(x, y, 1)`，平移生效）；向量表示方向/位移，不该被平移。
+// @note 等价于把 v 当 (x, y, 0) / (x, y, z, 0) 送进矩阵乘法，但**不要求**调用方自己补齐次分量。
+inline Vec2 applyVector(const Mat3& m, const Vec2& v) {
+    return Vec2(m(0, 0) * v.x + m(0, 1) * v.y,
+                m(1, 0) * v.x + m(1, 1) * v.y);
+}
+
+inline Vec3 applyVector(const Mat4& m, const Vec3& v) {
+    return Vec3(m(0, 0) * v.x + m(0, 1) * v.y + m(0, 2) * v.z,
+                m(1, 0) * v.x + m(1, 1) * v.y + m(1, 2) * v.z,
+                m(2, 0) * v.x + m(2, 1) * v.y + m(2, 2) * v.z);
+}
+
+// 取**平移分量**（矩阵最后一列的前几位）
+inline Vec2 translationOf(const Mat3& m) { return Vec2(m(0, 2), m(1, 2)); }
+inline Vec3 translationOf(const Mat4& m) { return Vec3(m(0, 3), m(1, 3), m(2, 3)); }
+
+// 取**线性部分**（去掉平移列与齐次行）：旋转/缩放/错切/反射都在这里
+inline Mat2 linearPartOf(const Mat3& m) {
+    return Mat2{{m(0, 0), m(0, 1)},
+                {m(1, 0), m(1, 1)}};
+}
+
+inline Mat3 linearPartOf(const Mat4& m) {
+    return Mat3{{m(0, 0), m(0, 1), m(0, 2)},
+                {m(1, 0), m(1, 1), m(1, 2)},
+                {m(2, 0), m(2, 1), m(2, 2)}};
+}
+
+// 是否为**仿射矩阵**：齐次行严格等于 (0, …, 0, 1)
+//   - 2D：第 2 行 = (0, 0, 1)；3D：第 3 行 = (0, 0, 0, 1)
+// @note 透视投影矩阵**不是**仿射矩阵（其第 3/4 行含非零项）；判断它可用于区分"仿射 vs 投影"。
+inline bool isAffine(const Mat3& m) {
+    return m(2, 0) == 0.0f && m(2, 1) == 0.0f && m(2, 2) == 1.0f;
+}
+
+inline bool isAffine(const Mat4& m) {
+    return m(3, 0) == 0.0f && m(3, 1) == 0.0f && m(3, 2) == 0.0f && m(3, 3) == 1.0f;
+}
 
 } // namespace gfx::math
 

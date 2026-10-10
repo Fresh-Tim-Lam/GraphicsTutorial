@@ -2,18 +2,19 @@
 //
 // 用途：把 Canvas 像素缓冲写成 PNG 文件；自行实现 CRC32/Adler32 与 zlib 存储块（stored deflate），
 //       不引入 zlib/libpng 等第三方库。
-// 目标读者：gfx 像素模块使用者与实现者（#include <gfx/png.hpp>）。
-// 关联文档：docs/design/adr-0005-raster-polygon-fill.md；canvas.hpp；color.hpp
+// 目标读者：gfx 像素模块使用者与实现者（#include <gfx/render/png.hpp>）。
+// 关联文档：docs/design/adr-0005-raster-polygon-fill.md；gfx/core/canvas.hpp；gfx/core/color.hpp
 //
 // 状态：生效中（2026-09-14）
 
 #ifndef GFX_PNG_HPP
 #define GFX_PNG_HPP
 
-#include "canvas.hpp"
+#include "gfx/core/canvas.hpp"
 
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -103,6 +104,17 @@ inline std::vector<std::uint8_t> makeZlibStored(const std::vector<std::uint8_t>&
     return z;
 }
 
+// 创建输出路径的父目录（递归）；失败静默忽略，交由随后的 fopen 给出确切错误。
+// @note 默认输出常写成 "output/xxx.png"，而该目录可能还不存在 —— 与其让调用方到处 mkdir，
+//       不如在这里补上（教学库里这是省心的行为）。
+inline void ensureParentDirectory(const char* path) {
+    const std::string p(path);
+    const std::size_t sep = p.find_last_of("/\\");
+    if (sep == std::string::npos || sep == 0) return;
+    std::error_code ec;
+    std::filesystem::create_directories(p.substr(0, sep), ec);
+}
+
 } // namespace detail
 
 // 把画布写成 8bit/通道 的 RGB PNG（alpha 通道被忽略：canvas 像素一律按不透明写出）。
@@ -158,6 +170,7 @@ inline bool savePng(const Canvas& canvas, const char* path, std::string* error =
     detail::appendChunk(file, "IDAT", idat.data(), idat.size());
     detail::appendChunk(file, "IEND", nullptr, 0);
 
+    detail::ensureParentDirectory(path);
     std::FILE* fp = std::fopen(path, "wb");
     if (!fp) {
         if (error) *error = std::string("无法打开输出文件：") + path;

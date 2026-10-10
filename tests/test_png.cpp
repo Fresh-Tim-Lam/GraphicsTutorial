@@ -4,7 +4,7 @@
 // 说明：仅用相对路径 test_png_out.png 作为临时输出，测试结束删除，不依赖任何外部文件。
 
 #include "gfx_test.hpp"
-#include <gfx/png.hpp>
+#include <gfx/render/png.hpp>
 
 #include <cstdint>
 #include <cstdio>

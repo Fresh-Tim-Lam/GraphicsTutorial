@@ -5,8 +5,8 @@
 //       链只记录、不计算；消费时折叠一次并缓存（单点 = 1 次 mat-vec，批点 = 复用该矩阵逐点）。
 //
 // 用途：图形层几何数据（点 / 顶点批）的变换入口；像素/图元绘制的前置几何处理。
-// 目标读者：使用几何变换的调用方与教学读者（#include <gfx/point.hpp>）。
-// 关联文档：docs/design/adr-0004-transform-chain.md；math/transform.hpp；math/batch.hpp
+// 目标读者：使用几何变换的调用方与教学读者（#include <gfx/geom/point.hpp>）。
+// 关联文档：docs/design/adr-0004-transform-chain.md；gfx/math/transform.hpp；gfx/math/batch.hpp
 //
 // 状态：生效中（2026-09-09）。ADR-0004（✅ 采纳）。
 
@@ -41,6 +41,10 @@ struct PointView2D {
 
 // 单个 2D 点：可累积变换链，也可 apply 外部变换
 class Point2D {
+private:
+    math::Vec2 p_;
+    math::Transform<3> t_;
+
 public:
     Point2D(float x, float y) : p_(x, y) {}
     explicit Point2D(const math::Vec2& p) : p_(p) {}
@@ -74,14 +78,25 @@ public:
 
     // 隐式转换：Vec2 v = p.translate(...);
     operator math::Vec2() const { return value(); }
-
-private:
-    math::Vec2 p_;
-    math::Transform<3> t_;
 };
 
 // 一批 2D 点：零拷贝视图 + 累积变换链
 class PointBatch2D {
+private:
+    // 逐点：读 (x,y) → 齐次 (x,y,1) → 矩阵变换 → 写回 (x,y)
+    void applyMatrix(const math::Mat3& m, math::Vec2* out) const {
+        if (view_.base == nullptr || out == nullptr) return;
+        for (std::size_t i = 0; i < view_.count; ++i) {
+            const float* src = reinterpret_cast<const float*>(
+                reinterpret_cast<const char*>(view_.base) + i * view_.strideBytes);
+            const math::Vec3 r = m * math::Vec3(src[0], src[1], 1.0f);
+            out[i] = math::Vec2(r.x, r.y);
+        }
+    }
+
+    PointView2D view_;
+    math::Transform<3> t_;
+
 public:
     explicit PointBatch2D(const PointView2D& view) : view_(view) {}
     PointBatch2D(const math::Vec2* points, std::size_t count) : view_(PointView2D::of(points, count)) {}
@@ -104,21 +119,6 @@ public:
     void apply(const math::Transform<3>& t, math::Vec2* out) const {
         applyMatrix(t.matrix() * t_.matrix(), out);
     }
-
-private:
-    // 逐点：读 (x,y) → 齐次 (x,y,1) → 矩阵变换 → 写回 (x,y)
-    void applyMatrix(const math::Mat3& m, math::Vec2* out) const {
-        if (view_.base == nullptr || out == nullptr) return;
-        for (std::size_t i = 0; i < view_.count; ++i) {
-            const float* src = reinterpret_cast<const float*>(
-                reinterpret_cast<const char*>(view_.base) + i * view_.strideBytes);
-            const math::Vec3 r = m * math::Vec3(src[0], src[1], 1.0f);
-            out[i] = math::Vec2(r.x, r.y);
-        }
-    }
-
-    PointView2D view_;
-    math::Transform<3> t_;
 };
 
 // ============================ 3D ============================
@@ -141,6 +141,10 @@ struct PointView3D {
 
 // 单个 3D 点
 class Point3D {
+private:
+    math::Vec3 p_;
+    math::Transform<4> t_;
+
 public:
     Point3D(float x, float y, float z) : p_(x, y, z) {}
     explicit Point3D(const math::Vec3& p) : p_(p) {}
@@ -171,14 +175,25 @@ public:
     }
 
     operator math::Vec3() const { return value(); }
-
-private:
-    math::Vec3 p_;
-    math::Transform<4> t_;
 };
 
 // 一批 3D 点
 class PointBatch3D {
+private:
+    // 逐点：读 (x,y,z) → 齐次 (x,y,z,1) → 矩阵变换 → 写回 (x,y,z)
+    void applyMatrix(const math::Mat4& m, math::Vec3* out) const {
+        if (view_.base == nullptr || out == nullptr) return;
+        for (std::size_t i = 0; i < view_.count; ++i) {
+            const float* src = reinterpret_cast<const float*>(
+                reinterpret_cast<const char*>(view_.base) + i * view_.strideBytes);
+            const math::Vec4 r = m * math::Vec4(src[0], src[1], src[2], 1.0f);
+            out[i] = math::Vec3(r.x, r.y, r.z);
+        }
+    }
+
+    PointView3D view_;
+    math::Transform<4> t_;
+
 public:
     explicit PointBatch3D(const PointView3D& view) : view_(view) {}
     PointBatch3D(const math::Vec3* points, std::size_t count) : view_(PointView3D::of(points, count)) {}
@@ -203,21 +218,6 @@ public:
     void apply(const math::Transform<4>& t, math::Vec3* out) const {
         applyMatrix(t.matrix() * t_.matrix(), out);
     }
-
-private:
-    // 逐点：读 (x,y,z) → 齐次 (x,y,z,1) → 矩阵变换 → 写回 (x,y,z)
-    void applyMatrix(const math::Mat4& m, math::Vec3* out) const {
-        if (view_.base == nullptr || out == nullptr) return;
-        for (std::size_t i = 0; i < view_.count; ++i) {
-            const float* src = reinterpret_cast<const float*>(
-                reinterpret_cast<const char*>(view_.base) + i * view_.strideBytes);
-            const math::Vec4 r = m * math::Vec4(src[0], src[1], src[2], 1.0f);
-            out[i] = math::Vec3(r.x, r.y, r.z);
-        }
-    }
-
-    PointView3D view_;
-    math::Transform<4> t_;
 };
 
 } // namespace gfx

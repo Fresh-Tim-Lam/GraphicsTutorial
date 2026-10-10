@@ -92,10 +92,64 @@ inline bool normalize(const Vec<N>& in, Vec<N>& out) {
     return true;
 }
 
+// ---- 光线追踪用向量运算（反射 / 折射）----
+
+// 镜面反射方向：r = d − 2(d·n)n。
+// @param d 入射方向（约定：**指向表面**，即与单位法向 n 的夹角 > 90°，d·n < 0）
+// @param n 表面单位法向（朝外）
+// @return 反射方向（长度与 d 相同；d 为单位矢量时 r 亦为单位矢量）
+// @note 对任意维度 N 成立；只做线性组合，不要求 d、n 严格单位化（调用方保证时结果为理想反射）。
+template <int N>
+inline Vec<N> reflect(const Vec<N>& d, const Vec<N>& n) {
+    return d - n * (2.0f * dot(d, n));
+}
+
+// 折射方向（Snell 定律）：eta = n1 / n2（入射介质折射率 / 出射介质折射率）。
+// @param d   入射方向（约定：**指向表面**，与朝外单位法向 n 满足 d·n < 0）
+// @param n   表面单位法向（朝外）
+// @param eta 折射率之比 eta = n1 / n2
+// @param out 输出折射方向（成功时被写入；全反射时保持不变）
+// @return true 并写入 out；当发生**全反射**时返回 false（out 不变）
+// @note 符号约定：以 c = d·n（< 0）代入 k = 1 − eta²(1 − c²)；k < 0 ⇒ 全反射。
+//       否则 out = normalize(eta·d − (eta·c + √k)·n)。当 eta = 1 时 out 与 d 同向（直线穿过的退化情形）。
+template <int N>
+inline bool refract(const Vec<N>& d, const Vec<N>& n, float eta, Vec<N>& out) {
+    const float c = dot(d, n);                                  // d 指向表面 ⇒ c < 0
+    const float k = 1.0f - eta * eta * (1.0f - c * c);          // cos²θ_t
+    if (k < 0.0f) return false;                                 // 全反射：无实折射方向
+    const float s = eta * c + std::sqrt(k);
+    Vec<N> r = d * eta - n * s;
+    const float len = r.length();                               // 数值误差下的安全归一化
+    out = (len == 0.0f) ? Vec<N>() : r / len;
+    return true;
+}
+
 // ---- 形状别名（教学/调用惯用命名；非加速特化，见 ADR-0002 补充澄清）----
 using Vec2 = Vec<2>;
 using Vec3 = Vec<3>;
 using Vec4 = Vec<4>;
+
+// ---- 齐次坐标：归一化（透视除法） ----
+
+// 齐次归一化：Vec4(x, y, z, w) → Vec3(x/w, y/w, z/w)。
+// @return w ≠ 0 时写入 out 并返回 true；w == 0（方向/无穷远点）返回 false，out 不变。
+// @note 齐次坐标里 (kx, ky, kz, k) 与 (x, y, z, 1) 表示同一点，除以 w 就把它拉回 w = 1 的规范形式；
+//       透视投影正是"先让 w 承载深度，最后除以 w"（见 transform3d::perspectiveToOrtho 与 View）。
+inline bool fromHomogeneous(const Vec4& h, Vec3& out) {
+    if (h.w == 0.0f) return false;
+    const float inv = 1.0f / h.w;
+    out = Vec3(h.x * inv, h.y * inv, h.z * inv);
+    return true;
+}
+
+// 二维版齐次归一化：Vec3(x, y, w) → Vec2(x/w, y/w)（二维点写作 Vec3(x, y, 1)）。
+// @return w ≠ 0 时写入 out 并返回 true；w == 0 返回 false，out 不变。
+inline bool fromHomogeneous(const Vec3& h, Vec2& out) {
+    if (h.z == 0.0f) return false;
+    const float inv = 1.0f / h.z;
+    out = Vec2(h.x * inv, h.y * inv);
+    return true;
+}
 
 } // namespace gfx::math
 

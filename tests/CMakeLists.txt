@@ -41,3 +41,33 @@ add_test(NAME test_raster COMMAND test_raster)
 add_executable(test_png test_png.cpp)
 target_link_libraries(test_png PRIVATE gfx_math)
 add_test(NAME test_png COMMAND test_png)
+
+# ---------- 相机/视图测试（世界↔像素映射、fit 语义、3D 观察与投影） ----------
+add_executable(test_view test_view.cpp)
+target_link_libraries(test_view PRIVATE gfx_math)
+add_test(NAME test_view COMMAND test_view)
+
+# ---------- 三角形光栅化测试（边界规则、重心坐标、抗锯齿、深度测试） ----------
+add_executable(test_triangle test_triangle.cpp)
+target_link_libraries(test_triangle PRIVATE gfx_math)
+add_test(NAME test_triangle COMMAND test_triangle)
+
+# ---------- 半边结构与欧拉操作测试（MVFS/MEV/MEF/KEMR/KFMRH） ----------
+add_executable(test_halfedge test_halfedge.cpp)
+target_link_libraries(test_halfedge PRIVATE gfx_math)
+add_test(NAME test_halfedge COMMAND test_halfedge)
+
+# ---------- 光线求交测试（反射/折射/球/平面/三角形/圆柱/AABB + BVH 一致性） ----------
+add_executable(test_ray test_ray.cpp)
+target_link_libraries(test_ray PRIVATE gfx_math)
+add_test(NAME test_ray COMMAND test_ray)
+
+# ---------- 光照模型与递归光线跟踪测试（局部光照/阴影/反射/折射/深度/超采样 + 作业三数值对齐） ----------
+add_executable(test_raytracer test_raytracer.cpp)
+target_link_libraries(test_raytracer PRIVATE gfx_math)
+add_test(NAME test_raytracer COMMAND test_raytracer)
+
+# ---------- 纹理与法线贴图测试（环绕/滤波采样、TBN、高度场→法线图、着色法向接口） ----------
+add_executable(test_normalmap test_normalmap.cpp)
+target_link_libraries(test_normalmap PRIVATE gfx_math)
+add_test(NAME test_normalmap COMMAND test_normalmap)

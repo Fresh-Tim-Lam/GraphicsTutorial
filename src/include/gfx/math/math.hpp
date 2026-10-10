@@ -11,9 +11,9 @@
 #ifndef GFX_MATH_MATH_HPP
 #define GFX_MATH_MATH_HPP
 
-#include "vec.hpp"       // Vec<N> + vec2/vec3/vec4
-#include "mat.hpp"       // Mat<N> + mat2/mat3/mat4
-#include "transform.hpp" // transform2d / transform3d（平移/缩放/旋转/翻转）
-#include "batch.hpp"     // 批量变换 + 后端钩子
+#include "gfx/math/vec.hpp"       // Vec<N> + vec2/vec3/vec4
+#include "gfx/math/mat.hpp"       // Mat<N> + mat2/mat3/mat4
+#include "gfx/math/transform.hpp" // transform2d / transform3d（平移/缩放/旋转/翻转）
+#include "gfx/math/batch.hpp"     // 批量变换 + 后端钩子
 
 #endif // GFX_MATH_MATH_HPP

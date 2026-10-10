@@ -6,7 +6,7 @@
 //
 // 状态：生效中（2026-09-09）
 
-#include "gfx/window.hpp"
+#include "gfx/render/window.hpp"
 
 #ifndef _WIN32
 #  error "gfx::Window 当前仅支持 Windows（Win32 GDI）"
@@ -46,6 +46,12 @@ struct Window::Impl {
     int clientHeight = 0;
     bool quitReceived = false;
 
+    // ---- 输入状态（消息处理直接写这里；Window 的查询方法转发过来）----
+    Window* owner = nullptr;                  // 回指，供 WM_DESTROY 调用 requestClose()
+    MouseState mouse;                         // 鼠标状态（dx/dy/wheel 为本帧增量）
+    std::array<bool, 256> keyDown{};          // 按住表（下标 = 虚拟键码）
+    std::array<bool, 256> keyPressed{};       // 本帧"刚按下"表
+
     ~Impl() {
         if (memDC && oldBitmap) ::SelectObject(memDC, oldBitmap);
         if (dib) ::DeleteObject(dib);
@@ -56,17 +62,45 @@ struct Window::Impl {
 
 namespace {
 
-Window* windowFromHwnd(HWND hwnd) {
-    return reinterpret_cast<Window*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+// 窗口句柄 → Impl（GWLP_USERDATA 存 Impl*，消息处理即可直接更新输入状态）
+Window::Impl* implFromHwnd(HWND hwnd) {
+    return reinterpret_cast<Window::Impl*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+}
+
+// 字符键 → 虚拟键码（'A'-'Z' 大小写不敏感 / '0'-'9' / 空格）
+int charToVirtualKey(char key) {
+    if (key >= 'a' && key <= 'z') key = static_cast<char>(key - 'a' + 'A');
+    if ((key >= 'A' && key <= 'Z') || (key >= '0' && key <= '9')) return key;
+    if (key == ' ') return VK_SPACE;
+    return 0;
+}
+
+int keyToVirtualKey(Key key) {
+    switch (key) {
+        case Key::Space:   return VK_SPACE;
+        case Key::Enter:   return VK_RETURN;
+        case Key::Escape:  return VK_ESCAPE;
+        case Key::Left:    return VK_LEFT;
+        case Key::Right:   return VK_RIGHT;
+        case Key::Up:      return VK_UP;
+        case Key::Down:    return VK_DOWN;
+        case Key::Plus:    return VK_OEM_PLUS;
+        case Key::Minus:   return VK_OEM_MINUS;
+        case Key::Shift:   return VK_SHIFT;
+        case Key::Control: return VK_CONTROL;
+        case Key::Tab:     return VK_TAB;
+    }
+    return 0;
 }
 
 LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    Window::Impl* impl = implFromHwnd(hwnd);
     switch (msg) {
         case WM_CLOSE:
             ::DestroyWindow(hwnd);
             return 0;
         case WM_DESTROY:
-            if (Window* w = windowFromHwnd(hwnd)) w->requestClose();
+            if (impl && impl->owner) impl->owner->requestClose();
             return 0;
         case WM_PAINT: {
             // 绘制完全由 present() 驱动；此处仅验证区域，避免闪烁清理
@@ -75,6 +109,49 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             ::EndPaint(hwnd, &ps);
             return 0;
         }
+        case WM_MOUSEMOVE:
+            if (impl) {
+                const int x = static_cast<short>(LOWORD(lParam));
+                const int y = static_cast<short>(HIWORD(lParam));
+                impl->mouse.dx += x - impl->mouse.x;   // 累积本帧位移（拖拽旋转用）
+                impl->mouse.dy += y - impl->mouse.y;
+                impl->mouse.x = x;
+                impl->mouse.y = y;
+            }
+            return 0;
+        case WM_LBUTTONDOWN: case WM_LBUTTONUP:
+        case WM_RBUTTONDOWN: case WM_RBUTTONUP:
+        case WM_MBUTTONDOWN: case WM_MBUTTONUP:
+            if (impl) {
+                const bool down = (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN);
+                if (msg == WM_LBUTTONDOWN || msg == WM_LBUTTONUP) impl->mouse.leftDown = down;
+                if (msg == WM_RBUTTONDOWN || msg == WM_RBUTTONUP) impl->mouse.rightDown = down;
+                if (msg == WM_MBUTTONDOWN || msg == WM_MBUTTONUP) impl->mouse.middleDown = down;
+                impl->mouse.x = static_cast<short>(LOWORD(lParam));
+                impl->mouse.y = static_cast<short>(HIWORD(lParam));
+            }
+            return 0;
+        case WM_MOUSEWHEEL:
+            if (impl) impl->mouse.wheel += GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
+            return 0;
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+            if (impl) {
+                const int vk = static_cast<int>(wParam);
+                if (vk >= 0 && vk < 256) {
+                    if (!impl->keyDown[static_cast<std::size_t>(vk)])
+                        impl->keyPressed[static_cast<std::size_t>(vk)] = true;   // 忽略系统自动重复
+                    impl->keyDown[static_cast<std::size_t>(vk)] = true;
+                }
+            }
+            return 0;
+        case WM_KEYUP:
+        case WM_SYSKEYUP:
+            if (impl) {
+                const int vk = static_cast<int>(wParam);
+                if (vk >= 0 && vk < 256) impl->keyDown[static_cast<std::size_t>(vk)] = false;
+            }
+            return 0;
         default:
             return ::DefWindowProcW(hwnd, msg, wParam, lParam);
     }
@@ -135,8 +212,10 @@ Window::Window(const char* title, int clientWidth, int clientHeight)
         return;
     }
 
+    // GWLP_USERDATA 存 Impl*（消息处理要直接更新输入状态），并回指 Window 以便请求关闭
+    impl_->owner = this;
     ::SetWindowLongPtrW(impl_->hwnd, GWLP_USERDATA,
-                        reinterpret_cast<LONG_PTR>(this));
+                        reinterpret_cast<LONG_PTR>(impl_.get()));
     impl_->clientWidth = clientWidth;
     impl_->clientHeight = clientHeight;
 
@@ -194,6 +273,13 @@ void Window::present() {
 
 bool Window::pollEvents() {
     if (!impl_ || !impl_->hwnd) return false;
+
+    // 进入新一帧：清空"增量"与"刚按下"（leftDown / x / y 这类**状态**保留）
+    impl_->mouse.dx = 0;
+    impl_->mouse.dy = 0;
+    impl_->mouse.wheel = 0;
+    impl_->keyPressed.fill(false);
+
     MSG msg;
     while (::PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
         if (msg.message == WM_QUIT) {
@@ -209,6 +295,32 @@ bool Window::pollEvents() {
 
 void Window::requestClose() {
     open_ = false;
+}
+
+// ---- 输入查询（转发到 Impl 的输入状态）----
+
+const MouseState& Window::mouse() const {
+    return impl_->mouse;
+}
+
+bool Window::keyPressed(char key) const {
+    const int vk = charToVirtualKey(key);
+    return vk > 0 && impl_ && impl_->keyPressed[static_cast<std::size_t>(vk)];
+}
+
+bool Window::keyPressed(Key key) const {
+    const int vk = keyToVirtualKey(key);
+    return vk > 0 && impl_ && impl_->keyPressed[static_cast<std::size_t>(vk)];
+}
+
+bool Window::keyDown(char key) const {
+    const int vk = charToVirtualKey(key);
+    return vk > 0 && impl_ && impl_->keyDown[static_cast<std::size_t>(vk)];
+}
+
+bool Window::keyDown(Key key) const {
+    const int vk = keyToVirtualKey(key);
+    return vk > 0 && impl_ && impl_->keyDown[static_cast<std::size_t>(vk)];
 }
 
 } // namespace gfx

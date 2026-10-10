@@ -4,16 +4,21 @@
 //
 // 测试策略：
 //   1. 画线：逐像素集合与"期望点集"精确比对（含八个卦限方向）。
+//   1b. 画线算法对照：Naive / DDA / Bresenham 三种实现在整数端点下逐像素一致（代表性线段），
+//       并校验非空、含端点、落在包围盒内，以及"默认参数即 Bresenham"。
 //   2. 填充：用**独立的实现**（射线法判点在多边形内，逐像素中心采样）作为参考，
 //      与被测填充结果逐像素比对 —— 这直接验证了"半开区间规则 + 成对填充"是否正确。
 //   3. 边界情形：水平边、共享顶点/极值点、凹多边形、顶点落在扫描线上、退化输入。
+//   4. 浮点端点画线：整数端点下与整数 Bresenham 逐像素一致；亚像素端点下保留精度（含 Point2D 直传）。
 
 #include "gfx_test.hpp"
 
-#include <gfx/raster.hpp>
+#include <gfx/geom/point.hpp>
+#include <gfx/render/raster.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <iterator>
 #include <string>
 #include <utility>
@@ -67,6 +72,29 @@ int countFilled(const Canvas& c) {
         for (int x = 0; x < c.width(); ++x)
             if (c.pixelAt(x, y) == kFill) ++n;
     return n;
+}
+
+// 收集画布上所有"填充色"像素坐标（按 y 再 x 升序）——用于逐像素比对
+std::vector<std::pair<int, int>> filledPixels(const Canvas& c) {
+    std::vector<std::pair<int, int>> v;
+    for (int y = 0; y < c.height(); ++y)
+        for (int x = 0; x < c.width(); ++x)
+            if (c.pixelAt(x, y) == kFill) v.emplace_back(x, y);
+    return v;
+}
+
+// 打印某算法的像素列表（仅在不一致时用于回传原始证据）
+void printPixels(const char* name, const std::vector<std::pair<int, int>>& px) {
+    std::fprintf(stderr, "    %s(%zu):", name, px.size());
+    for (const std::pair<int, int>& p : px) std::fprintf(stderr, " (%d,%d)", p.first, p.second);
+    std::fprintf(stderr, "\n");
+}
+
+// 两个（已按 y 再 x 升序的）像素列表的**对称差**大小 —— 即两算法"不一致"的像素数
+int pixelSetDiff(const std::vector<std::pair<int, int>>& a, const std::vector<std::pair<int, int>>& b) {
+    std::vector<std::pair<int, int>> d;
+    std::set_symmetric_difference(a.begin(), a.end(), b.begin(), b.end(), std::back_inserter(d));
+    return static_cast<int>(d.size());
 }
 
 // 生成简单凹多边形：10 顶点星形（外/内半径交替），中心坐标带非半整数偏移以避免"中心恰落在边上"
@@ -123,6 +151,210 @@ int main() {
             for (int x = 0; x < 16; ++x)
                 if (f1.pixelAt(x, y) != f2.pixelAt(x, y)) ++diff;
         TEST_CHECK(diff == 0);
+    }
+
+    // ---------------- 画直线算法对照：Naive / DDA / Bresenham ----------------
+    {
+        struct Seg { int x0, y0, x1, y1; const char* name; };
+        // 代表性线段（整数端点）。刻意避开"直线恰穿过像素中心中线"（半整数并列）的斜率：
+        // 那种并列情形下 DDA/Naive 的"四舍五入"与 Bresenham 的并列取舍可能相差 1 像素；
+        // 本测试锁定三者**应当完全一致**的一般情形（并列情形见 line-algorithms 演示与 README）。
+        const Seg segs[] = {
+            {2, 3, 20, 3, "水平"},
+            {7, 1, 7, 25, "垂直"},
+            {3, 3, 30, 30, "45°"},
+            {30, 30, 3, 3, "45°反向"},
+            {0, 0, 21, 7, "缓斜 1/3"},
+            {0, 0, 21, 9, "缓斜 3/7"},
+            {0, 0, 7, 21, "陡斜 3/1"},
+            {0, 0, 9, 21, "陡斜 7/3"},
+            {30, 5, 5, 20, "负缓斜 -3/5"},
+            {5, 20, 30, 5, "负缓斜反向"},
+            {5, 5, 20, 30, "负陡斜 5/3"},
+            {20, 30, 5, 5, "负陡斜反向"},
+            {10, 10, 11, 10, "长度 1"},
+            {10, 10, 10, 10, "退化点"},
+            {0, 0, 199, 51, "极长缓斜"},
+            {0, 0, 51, 199, "极长陡斜"},
+        };
+        const gfx::LineAlgorithm algos[3] = {gfx::LineAlgorithm::Naive, gfx::LineAlgorithm::DDA,
+                                             gfx::LineAlgorithm::Bresenham};
+        const char* algoNames[3] = {"Naive", "DDA", "Bresenham"};
+        constexpr int kSize = 210;
+
+        for (const Seg& s : segs) {
+            Canvas cs[3] = {Canvas(kSize, kSize), Canvas(kSize, kSize), Canvas(kSize, kSize)};
+            for (int a = 0; a < 3; ++a)
+                gfx::drawLine(cs[a], s.x0, s.y0, s.x1, s.y1, kFill, algos[a]);
+            std::vector<std::pair<int, int>> px[3];
+            for (int a = 0; a < 3; ++a) px[a] = filledPixels(cs[a]);
+
+            // ① 三种算法逐像素完全一致（若不一致，打印各算法像素列表作为原始证据）
+            const bool same = (px[0] == px[1]) && (px[1] == px[2]);
+            TEST_CHECK(same);
+            if (!same) {
+                std::fprintf(stderr, "  [不一致] 线段 %s (%d,%d)-(%d,%d):\n",
+                             s.name, s.x0, s.y0, s.x1, s.y1);
+                for (int a = 0; a < 3; ++a) printPixels(algoNames[a], px[a]);
+            }
+
+            // ② 非空，且含两个端点
+            TEST_CHECK(!px[2].empty());
+            TEST_CHECK(cs[2].pixelAt(s.x0, s.y0) == kFill);
+            TEST_CHECK(cs[2].pixelAt(s.x1, s.y1) == kFill);
+
+            // ③ 所有像素落在线段的包围盒内（不越界、不越写）
+            const int bx0 = std::min(s.x0, s.x1), bx1 = std::max(s.x0, s.x1);
+            const int by0 = std::min(s.y0, s.y1), by1 = std::max(s.y0, s.y1);
+            bool inBox = true;
+            for (int y = 0; y < kSize && inBox; ++y) {
+                for (int x = 0; x < kSize; ++x) {
+                    if (cs[2].pixelAt(x, y) == kFill && (x < bx0 || x > bx1 || y < by0 || y > by1)) {
+                        inBox = false;
+                        break;
+                    }
+                }
+            }
+            TEST_CHECK(inBox);
+        }
+
+        // ④ 默认参数即最优：不传算法 == 显式传 Bresenham
+        {
+            Canvas cDef(kSize, kSize), cBres(kSize, kSize);
+            gfx::drawLine(cDef, 5, 7, 40, 33, kFill);                                 // 默认（应为 Bresenham）
+            gfx::drawLine(cBres, 5, 7, 40, 33, kFill, gfx::LineAlgorithm::Bresenham); // 显式 Bresenham
+            TEST_CHECK(filledPixels(cDef) == filledPixels(cBres));
+
+            Canvas cDef2(kSize, kSize), cBres2(kSize, kSize);
+            gfx::drawLine(cDef2, 60, 5, 8, 44, kFill);
+            gfx::drawLine(cBres2, 60, 5, 8, 44, kFill, gfx::LineAlgorithm::Bresenham);
+            TEST_CHECK(filledPixels(cDef2) == filledPixels(cBres2));
+        }
+    }
+
+    // ---------------- 浮点端点画线（保留亚像素 + 与整数版逐像素一致） ----------------
+    {
+        // ① 整数端点：经**唯一入口**（Vec2 形式）自动选中纯整数 Bresenham，与直接调用内部整数版**逐像素一致**
+        //    （保证"收敛为单一 API 且不丢整数性能"的替换安全；内部整数版仍在 detail:: 中）
+        const float intEnds[][4] = {
+            {0, 0, 10, 3}, {0, 0, 9, 9}, {3, 0, 5, 11}, {1, 2, 12, 7},
+            {12, 7, 1, 2}, {0, 0, 15, 1}, {2, 14, 13, 3}, {7, 7, 7, 1},
+        };
+        for (const float* e : intEnds) {
+            Canvas ci(16, 16), cf(16, 16);
+            gfx::detail::drawLineBresenham(ci, static_cast<int>(e[0]), static_cast<int>(e[1]),
+                                           static_cast<int>(e[2]), static_cast<int>(e[3]), kFill);
+            gfx::drawLine(cf, e[0], e[1], e[2], e[3], kFill);
+            int diff = 0;
+            for (int y = 0; y < 16; ++y)
+                for (int x = 0; x < 16; ++x)
+                    if (ci.pixelAt(x, y) != cf.pixelAt(x, y)) ++diff;
+            TEST_CHECK(diff == 0);
+        }
+
+        // ② 亚像素端点·短线：steps = lround(max(2.2, 1.4)) = 2
+        //    t = 0 / 0.5 / 1 ⇒ 采样点 (0.4,0.3) / (1.49999995, 1.0) / (2.6,1.7) ⇒ 像素 (0,0) (1,1) (3,2)
+        //    注意 x 是 1.49999995（float 的 0.4/2.6 本身就略偏小）⇒ 落像素 1，不是 2。
+        Canvas shortLine(8, 8);
+        gfx::drawLine(shortLine, 0.4f, 0.3f, 2.6f, 1.7f, kFill);
+        TEST_CHECK(countFilled(shortLine) == 3);
+        TEST_CHECK(shortLine.pixelAt(0, 0) == kFill);
+        TEST_CHECK(shortLine.pixelAt(1, 1) == kFill);
+        TEST_CHECK(shortLine.pixelAt(3, 2) == kFill);
+        TEST_CHECK(shortLine.pixelAt(2, 1) == kBg);   // 整数版（端点取整成 (0,0)→(3,2)）会多画这一格
+
+        // ③ 亚像素端点·长缓斜线：端点取整会让整数版的阶梯**整体偏一行**
+        //    (0.0,0.4) → (100.0,10.4)：i=1 时 y = 0.4 + 0.104 = 0.504 ⇒ 行 1
+        Canvas longLine(104, 16);
+        gfx::drawLine(longLine, 0.0f, 0.4f, 100.0f, 10.4f, kFill);
+        TEST_CHECK(longLine.pixelAt(0, 0) == kFill);      // 起点 lround(0.4) = 0
+        TEST_CHECK(longLine.pixelAt(1, 1) == kFill);      // 浮点版：落在行 1
+        TEST_CHECK(longLine.pixelAt(1, 0) == kBg);        // 整数版会落在行 0
+        TEST_CHECK(longLine.pixelAt(100, 10) == kFill);   // 终点 lround(10.4) = 10
+
+        // ④ 两点落在同一像素（steps = 0）：退化成一个点
+        Canvas dot(4, 4);
+        gfx::drawLine(dot, 1.2f, 1.3f, 1.4f, 1.1f, kFill);
+        TEST_CHECK(countFilled(dot) == 1);
+        TEST_CHECK(dot.pixelAt(1, 1) == kFill);
+
+        // ⑤ 几何层 Point2D：经隐式转换取**变换后**的坐标，再以平铺坐标传入唯一入口
+        Canvas fromPoint(16, 16);
+        gfx::Point2D p(2.0f, 3.0f);
+        p.translate(4.0f, 0.0f);                    // 变换后 = (6, 3)
+        const gfx::Point2D q(6.0f, 3.0f);           // 与 p 的变换后坐标重合
+        const Vec2 pv = p;                          // 隐式转换取变换后的坐标
+        const Vec2 qv = q;
+        gfx::drawLine(fromPoint, pv.x, pv.y, qv.x, qv.y, kFill);
+        TEST_CHECK(countFilled(fromPoint) == 1);
+        TEST_CHECK(fromPoint.pixelAt(6, 3) == kFill);
+    }
+
+    // ---------------- 浮点端点的算法选择（统一接口：同样可选算法、同样默认 Bresenham） ----------------
+    {
+        struct FSeg { float x0, y0, x1, y1; const char* name; };
+        const FSeg fsegs[] = {
+            {0.4f, 0.3f, 2.6f, 1.7f, "短线"},
+            {0.0f, 0.4f, 100.0f, 10.4f, "长缓斜"},
+            {3.3f, 2.7f, 40.6f, 33.1f, "一般斜"},
+            {5.2f, 2.1f, 12.6f, 40.7f, "陡斜"},
+            {1.2f, 1.3f, 1.4f, 1.1f, "退化点"},
+        };
+        constexpr int kSize = 112;
+
+        // ① 浮点版"不传算法" == 显式传 Bresenham（默认统一为 Bresenham）
+        for (const FSeg& s : fsegs) {
+            Canvas cd(kSize, kSize), cb(kSize, kSize);
+            gfx::drawLine(cd, s.x0, s.y0, s.x1, s.y1, kFill);   // 默认
+            gfx::drawLine(cb, s.x0, s.y0, s.x1, s.y1, kFill, gfx::LineAlgorithm::Bresenham);
+            TEST_CHECK(filledPixels(cd) == filledPixels(cb));
+        }
+
+        // ② 浮点版传 DDA / Naive：能编译、非空、含两端点、像素落在包围盒内；
+        //    与 Bresenham 的差异**如实打印**，并断言"受限"（不超过该线段像素总数的一个小比例）。
+        const gfx::LineAlgorithm algos[3] = {gfx::LineAlgorithm::Bresenham, gfx::LineAlgorithm::DDA,
+                                             gfx::LineAlgorithm::Naive};
+        const char* names[3] = {"Bresenham", "DDA", "Naive"};
+        for (const FSeg& s : fsegs) {
+            Canvas cs[3] = {Canvas(kSize, kSize), Canvas(kSize, kSize), Canvas(kSize, kSize)};
+            for (int a = 0; a < 3; ++a)
+                gfx::drawLine(cs[a], s.x0, s.y0, s.x1, s.y1, kFill, algos[a]);
+            std::vector<std::pair<int, int>> px[3];
+            for (int a = 0; a < 3; ++a) px[a] = filledPixels(cs[a]);
+
+            const int ex0 = static_cast<int>(std::lround(s.x0));
+            const int ey0 = static_cast<int>(std::lround(s.y0));
+            const int ex1 = static_cast<int>(std::lround(s.x1));
+            const int ey1 = static_cast<int>(std::lround(s.y1));
+            const int bx0 = std::min(ex0, ex1), bx1 = std::max(ex0, ex1);
+            const int by0 = std::min(ey0, ey1), by1 = std::max(ey0, ey1);
+
+            for (int a = 0; a < 3; ++a) {
+                TEST_CHECK(!px[a].empty());                     // 非空
+                TEST_CHECK(cs[a].pixelAt(ex0, ey0) == kFill);   // 含起点
+                TEST_CHECK(cs[a].pixelAt(ex1, ey1) == kFill);   // 含终点
+                bool inBox = true;                              // 落在端点包围盒内
+                for (const std::pair<int, int>& p : px[a])
+                    if (p.first < bx0 || p.first > bx1 || p.second < by0 || p.second > by1) inBox = false;
+                TEST_CHECK(inBox);
+            }
+
+            // 与 Bresenham 的对称差像素数：打印实际值，并断言"受限"（≤ max(2, 总数/4)，不假设必然一致）。
+            // 实测：只有"直线**恰穿过像素中心的中线（严格 .5 并列）**"的长缓斜线（dy=10.0）出现差异
+            //       （Naive=2、DDA=16，源于浮点取舍方向不同）；其余线段三者逐像素一致（均为 0）。
+            const int dDDA = pixelSetDiff(px[1], px[0]);
+            const int dNaive = pixelSetDiff(px[2], px[0]);
+            const int bound = std::max(2, static_cast<int>(px[0].size()) / 4);
+            std::fprintf(stderr,
+                         "  [浮点算法差异] %-6s 像素数 Bren=%zu DDA=%zu Naive=%zu | DDA<->Bren=%d Naive<->Bren=%d (界=%d)\n",
+                         s.name, px[0].size(), px[1].size(), px[2].size(), dDDA, dNaive, bound);
+            TEST_CHECK(dDDA <= bound);
+            TEST_CHECK(dNaive <= bound);
+            if (dDDA > bound || dNaive > bound) {               // 超界时回传三算法原始像素列表
+                std::fprintf(stderr, "  [超界] 线段 %s (%.2f,%.2f)-(%.2f,%.2f):\n", s.name, s.x0, s.y0, s.x1, s.y1);
+                for (int a = 0; a < 3; ++a) printPixels(names[a], px[a]);
+            }
+        }
     }
 
     // ---------------- 轴对齐矩形：精确区间 ----------------

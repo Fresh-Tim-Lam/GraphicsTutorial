@@ -16,6 +16,14 @@
 | test_transform | 常用变换矩阵：平移/缩放/旋转/翻转（2D/3D）+ 组合顺序 | gfx_math（transform） |
 | test_chain | 变换链 Transform&lt;N&gt;：折叠等价、组合语义、批点（连续/步长）、原地 | gfx_math（transform） |
 | test_point | 几何层：Point2D/3D、PointBatch2D/3D 的 apply 变换、视图、原地 | gfx（point.hpp） |
+| test_raster | 光栅化：画线（Naive/DDA/Bresenham）+ 扫描线多边形填充 | gfx（raster.hpp） |
+| test_png | PNG 编码器（CRC32/Adler32/块结构） | gfx（png.hpp） |
+| test_view | 相机/视图：世界↔像素映射、fit 语义、3D 观察与投影 | gfx（view.hpp） |
+| test_triangle | 三角形光栅化：边界规则、重心坐标、抗锯齿、深度测试 | gfx（triangle.hpp） |
+| test_halfedge | 半边结构 + 欧拉操作（MVFS/MEV/MEF/KEMR/KFMRH） | gfx（halfedge.hpp） |
+| test_ray | 光线求交：反射/折射 + 球/平面/三角形/圆柱/AABB + BVH 一致性 | gfx（ray.hpp/bvh.hpp） |
+| test_raytracer | 光照与递归跟踪：局部光照/阴影/反射/折射/深度/超采样 + 作业三数值对齐 | gfx（lighting.hpp/raytracer.hpp） |
+| test_normalmap | 纹理与法线贴图：三种环绕索引、最近邻/双线性采样、decodeNormal、高度场→法线图（含与解析斜率对齐、strength=0 退化）、球/平面切空间正交性与右手系、perturbNormal、跟踪器的着色法向接口 | gfx（texture.hpp/normalmap.hpp/raytracer.hpp） |
 
 ## 约定
 

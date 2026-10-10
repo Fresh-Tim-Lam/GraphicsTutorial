@@ -16,7 +16,7 @@
 #ifndef GFX_MATH_BATCH_HPP
 #define GFX_MATH_BATCH_HPP
 
-#include "mat.hpp"
+#include "gfx/math/mat.hpp"
 
 #include <cstddef>
 

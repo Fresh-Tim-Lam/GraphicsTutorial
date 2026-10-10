@@ -40,7 +40,7 @@
 ### D5：2D/3D 分两组类型（不合并）
 - `Point2D/PointBatch2D` 用 `Transform<3>` + 齐次 `Vec3(x,y,1)`；`Point3D/PointBatch3D` 用 `Transform<4>` + `Vec4(x,y,z,1)`。
 - 理由：类型清晰、防误用；代价是两组类型与少量重复代码。
-- 注：`Vec<N>` 恒 4 float 存储（ADR-0002）。`Transform<N>::apply(batch)` 要求输入点**已齐次**（N=4 的 w=1 / N=3 的 z=1）；"位置 → 齐次"的注入由 gfx 几何层（[point.hpp](../../src/include/gfx/point.hpp)）逐点完成，故 2D/3D 点批当前都走 CPU 逐点路径；将来若以齐次数组存储（`Vec4` 连续），可经 [batch.hpp](../../src/include/gfx/math/batch.hpp) 后端钩子改走 SIMD/GPU。
+- 注：`Vec<N>` 恒 4 float 存储（ADR-0002）。`Transform<N>::apply(batch)` 要求输入点**已齐次**（N=4 的 w=1 / N=3 的 z=1）；"位置 → 齐次"的注入由 gfx 几何层（[point.hpp](../../src/include/gfx/geom/point.hpp)）逐点完成，故 2D/3D 点批当前都走 CPU 逐点路径；将来若以齐次数组存储（`Vec4` 连续），可经 [batch.hpp](../../src/include/gfx/math/batch.hpp) 后端钩子改走 SIMD/GPU。
 
 ## 后果
 

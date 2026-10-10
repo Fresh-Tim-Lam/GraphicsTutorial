@@ -4,7 +4,7 @@
 // 运行：ctest --test-dir build -C Release -R test_point
 
 #include "gfx_test.hpp"
-#include <gfx/point.hpp>
+#include <gfx/geom/point.hpp>
 
 #include <cstddef>
 

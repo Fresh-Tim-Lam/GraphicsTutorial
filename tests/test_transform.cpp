@@ -265,5 +265,195 @@ int main() {
         TEST_NEAR(q.z, 3.0f, 1e-5f);
     }
 
+    // ---- 2D：错切 shear（x' = x + sxy·y；纯错切保面积；逆变换）----
+    {
+        // 水平错切 a = 2：y = 1 的点水平移动 2（讲义的"两个锚点"：y=0 不动、y=1 移 a）
+        const Mat3 h = transform2d::shear(2.0f, 0.0f);
+        const Vec3 p = h * Vec3(3.0f, 1.0f, 1.0f);
+        TEST_NEAR(p.x, 5.0f, 1e-5f);
+        TEST_NEAR(p.y, 1.0f, 1e-5f);
+        const Vec3 anchor = h * Vec3(3.0f, 0.0f, 1.0f);
+        TEST_NEAR(anchor.x, 3.0f, 1e-5f);
+
+        // 纯错切 det = 1（面积不变）；双向错切 det = 1 − sxy·syx
+        TEST_NEAR(h.determinant(), 1.0f, 1e-5f);
+        const Mat3 both = transform2d::shear(0.5f, 0.25f);
+        TEST_NEAR(both.determinant(), 1.0f - 0.5f * 0.25f, 1e-5f);
+
+        // 闭式逆 × 原矩阵 = 恒等
+        Mat3 inv;
+        TEST_CHECK(transform2d::inverseShear(0.5f, 0.25f, inv));
+        const Mat3 prod = inv * both;
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 3; ++c)
+                TEST_NEAR(prod(r, c), (r == c) ? 1.0f : 0.0f, 1e-5f);
+
+        // det = 0（sxy·syx = 1）⇒ 不可逆
+        Mat3 dummy;
+        TEST_CHECK(!transform2d::inverseShear(1.0f, 1.0f, dummy));
+    }
+
+    // ---- 2D/3D：逆变换闭式（与通用逆互校）----
+    {
+        const Vec2 t(3.0f, -4.0f);
+        const Vec2 s(2.0f, 5.0f);
+        const Mat3 m = transform2d::translate(t) * transform2d::rotate(0.7f) * transform2d::scale(s);
+
+        Mat3 si;
+        TEST_CHECK(transform2d::inverseScale(s, si));
+        // M = T·R·S ⇒ M⁻¹ = S⁻¹·R⁻¹·T⁻¹
+        const Mat3 closedInv = si * transform2d::inverseRotate(0.7f) * transform2d::inverseTranslate(t);
+        Mat3 genericInv;
+        TEST_CHECK(m.inverse(genericInv));
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 3; ++c)
+                TEST_NEAR(closedInv(r, c), genericInv(r, c), 1e-5f);
+
+        // 3D：旋转 + 平移
+        const Mat4 m3 = transform3d::translate(Vec3(4.0f, -2.0f, 1.0f)) * transform3d::rotate(0.9f, Axis::Z);
+        const Mat4 closedInv3 = transform3d::inverseRotate(0.9f, Axis::Z)
+                              * transform3d::inverseTranslate(Vec3(4.0f, -2.0f, 1.0f));
+        Mat4 genericInv3;
+        TEST_CHECK(m3.inverse(genericInv3));
+        for (int r = 0; r < 4; ++r)
+            for (int c = 0; c < 4; ++c)
+                TEST_NEAR(closedInv3(r, c), genericInv3(r, c), 1e-5f);
+
+        // 零分量缩放：不可逆
+        Mat4 bad;
+        TEST_CHECK(!transform3d::inverseScale(Vec3(1.0f, 0.0f, 2.0f), bad));
+    }
+
+    // ---- 向量变换（w = 0）：忽略平移，与点变换明确区分 ----
+    {
+        const Mat3 m2 = transform2d::translate(Vec2(10.0f, 20.0f)) * transform2d::scale(Vec2(2.0f, 3.0f));
+        const Vec3 pt = m2 * Vec3(1.0f, 1.0f, 1.0f);      // 点：平移生效
+        TEST_NEAR(pt.x, 12.0f, 1e-5f);
+        TEST_NEAR(pt.y, 23.0f, 1e-5f);
+        const Vec2 v = applyVector(m2, Vec2(1.0f, 1.0f)); // 向量：只缩放
+        TEST_NEAR(v.x, 2.0f, 1e-5f);
+        TEST_NEAR(v.y, 3.0f, 1e-5f);
+
+        const Mat4 m3 = transform3d::translate(Vec3(5.0f, 6.0f, 7.0f)) * transform3d::scale(2.0f);
+        const Vec3 v3 = applyVector(m3, Vec3(1.0f, 0.0f, -1.0f));
+        TEST_NEAR(v3.x, 2.0f, 1e-5f);
+        TEST_NEAR(v3.y, 0.0f, 1e-5f);
+        TEST_NEAR(v3.z, -2.0f, 1e-5f);
+
+        // 变换链上同样可用（纯平移链对向量的作用 = 恒等）
+        const Transform<3> chain = Transform<3>(transform2d::translate(Vec2(100.0f, 100.0f)));
+        const Vec2 cv = chain.applyVector(Vec2(1.0f, 2.0f));
+        TEST_NEAR(cv.x, 1.0f, 1e-5f);
+        TEST_NEAR(cv.y, 2.0f, 1e-5f);
+    }
+
+    // ---- 齐次归一化（除以 w）----
+    {
+        Vec3 out3;
+        TEST_CHECK(fromHomogeneous(Vec4(2.0f, 4.0f, 6.0f, 2.0f), out3));
+        TEST_NEAR(out3.x, 1.0f, 1e-5f);
+        TEST_NEAR(out3.y, 2.0f, 1e-5f);
+        TEST_NEAR(out3.z, 3.0f, 1e-5f);
+
+        // 同一点的任意非零倍数：结果相同
+        Vec3 scaled;
+        TEST_CHECK(fromHomogeneous(Vec4(10.0f, 20.0f, 30.0f, 10.0f), scaled));
+        TEST_NEAR(scaled.x, 1.0f, 1e-5f);
+
+        // w = 0：失败且 out 不变
+        Vec3 keep(9.0f, 9.0f, 9.0f);
+        TEST_CHECK(!fromHomogeneous(Vec4(1.0f, 2.0f, 3.0f, 0.0f), keep));
+        TEST_NEAR(keep.x, 9.0f, 1e-5f);
+
+        // 2D 版
+        Vec2 out2;
+        TEST_CHECK(fromHomogeneous(Vec3(4.0f, 6.0f, 2.0f), out2));
+        TEST_NEAR(out2.x, 2.0f, 1e-5f);
+        TEST_NEAR(out2.y, 3.0f, 1e-5f);
+    }
+
+    // ---- 3D：欧拉角 ----
+    {
+        // 只有 γ：应等价 Rz(90°)，x -> y
+        const Vec4 p = transform3d::euler(0.0f, 0.0f, kPi / 2.0f) * Vec4(1.0f, 0.0f, 0.0f, 1.0f);
+        TEST_NEAR(p.x, 0.0f, 1e-5f);
+        TEST_NEAR(p.y, 1.0f, 1e-5f);
+
+        // 与"逐个 rotate 相乘"完全一致（Rx·Ry·Rz）
+        const Mat4 manual = transform3d::rotate(0.3f, Axis::X)
+                          * transform3d::rotate(0.5f, Axis::Y)
+                          * transform3d::rotate(0.7f, Axis::Z);
+        const Mat4 viaEuler = transform3d::euler(0.3f, 0.5f, 0.7f);
+        for (int r = 0; r < 4; ++r)
+            for (int c = 0; c < 4; ++c)
+                TEST_NEAR(viaEuler(r, c), manual(r, c), 1e-6f);
+
+        // 顺序敏感：Rx·Ry ≠ Ry·Rx（至少有一项明显不同）
+        const Mat4 xy = transform3d::rotate(0.9f, Axis::X) * transform3d::rotate(0.4f, Axis::Y);
+        const Mat4 yx = transform3d::rotate(0.4f, Axis::Y) * transform3d::rotate(0.9f, Axis::X);
+        int diff = 0;
+        for (int r = 0; r < 4; ++r)
+            for (int c = 0; c < 4; ++c)
+                if (std::fabs(xy(r, c) - yx(r, c)) > 1e-4f) ++diff;
+        TEST_CHECK(diff > 0);
+
+        // 纯旋转：det = 1，且仍是仿射矩阵
+        TEST_NEAR(viaEuler.determinant(), 1.0f, 1e-4f);
+        TEST_CHECK(isAffine(viaEuler));
+    }
+
+    // ---- 3D：带原点的坐标基 frame ----
+    {
+        const Mat4 f = transform3d::frame(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f),
+                                          Vec3(0.0f, 0.0f, 1.0f), Vec3(5.0f, 6.0f, 7.0f));
+        // 新原点 (0,0,0) → 世界 o；局部 (1,0,0) → o + u
+        const Vec4 o = f * Vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        TEST_NEAR(o.x, 5.0f, 1e-5f);
+        TEST_NEAR(o.y, 6.0f, 1e-5f);
+        TEST_NEAR(o.z, 7.0f, 1e-5f);
+        const Vec4 q = f * Vec4(1.0f, 0.0f, 0.0f, 1.0f);
+        TEST_NEAR(q.x, 6.0f, 1e-5f);
+
+        // frame(..., 原点 = 0) == basis(...)（basis 只是它的线性部分）
+        const Mat4 withOriginZero = transform3d::frame(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f),
+                                                       Vec3(0.0f, 0.0f, 1.0f), Vec3(0.0f, 0.0f, 0.0f));
+        const Mat4 b = transform3d::basis(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f));
+        for (int r = 0; r < 4; ++r)
+            for (int c = 0; c < 4; ++c)
+                TEST_NEAR(withOriginZero(r, c), b(r, c), 1e-6f);
+
+        // 旋转过的坐标基（u = +Y、v = −X）应等价 Rz(90°) 的线性部分
+        const Mat4 rz = transform3d::frame(Vec3(0.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f),
+                                           Vec3(0.0f, 0.0f, 1.0f), Vec3(0.0f, 0.0f, 0.0f));
+        const Vec4 rp = rz * Vec4(1.0f, 0.0f, 0.0f, 1.0f);
+        TEST_NEAR(rp.x, 0.0f, 1e-5f);
+        TEST_NEAR(rp.y, 1.0f, 1e-5f);
+    }
+
+    // ---- 仿射矩阵拆解（线性部分 / 平移 / isAffine）----
+    {
+        const Mat3 m = transform2d::translate(Vec2(3.0f, -1.0f)) * transform2d::scale(Vec2(2.0f, 4.0f));
+        const Vec2 tr = translationOf(m);
+        TEST_NEAR(tr.x, 3.0f, 1e-5f);
+        TEST_NEAR(tr.y, -1.0f, 1e-5f);
+        const Mat2 lin = linearPartOf(m);
+        TEST_NEAR(lin(0, 0), 2.0f, 1e-5f);
+        TEST_NEAR(lin(1, 1), 4.0f, 1e-5f);
+        TEST_CHECK(isAffine(m));
+
+        const Mat4 m3 = transform3d::translate(Vec3(1.0f, 2.0f, 3.0f)) * transform3d::rotate(0.5f, Axis::Y);
+        const Vec3 tr3 = translationOf(m3);
+        TEST_NEAR(tr3.x, 1.0f, 1e-5f);
+        TEST_NEAR(tr3.z, 3.0f, 1e-5f);
+        TEST_CHECK(isAffine(m3));
+        // 仿射下：线性部分的行列式 = 整体行列式
+        TEST_NEAR(linearPartOf(m3).determinant(), m3.determinant(), 1e-5f);
+
+        // 非仿射（透视式第 4 行含非零项）应被判否
+        Mat4 persp = Mat4::identity();
+        persp(3, 2) = -1.0f;
+        TEST_CHECK(!isAffine(persp));
+    }
+
     return gfx::test::summary();
 }

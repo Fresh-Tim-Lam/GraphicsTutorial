@@ -21,7 +21,7 @@
 //   ③ "每点新建一条链"（D）是反模式——链应挂在变换对象上被多点复用。
 
 #include <gfx/math/math.hpp>
-#include <gfx/point.hpp>
+#include <gfx/geom/point.hpp>
 
 #include <chrono>
 #include <cstdio>

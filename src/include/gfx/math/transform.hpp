@@ -17,9 +17,9 @@
 #ifndef GFX_MATH_TRANSFORM_HPP
 #define GFX_MATH_TRANSFORM_HPP
 
-#include "batch.hpp"
-#include "mat.hpp"
-#include "vec.hpp"
+#include "gfx/math/batch.hpp"
+#include "gfx/math/mat.hpp"
+#include "gfx/math/vec.hpp"
 
 #include <cmath>
 #include <cstddef>
@@ -83,6 +83,46 @@ inline Mat3 flipX() { return scale(Vec2(-1.0f, 1.0f)); }
 
 // Y 轴镜像翻转（上下翻转；负 y）
 inline Mat3 flipY() { return scale(Vec2(1.0f, -1.0f)); }
+
+// 错切（shear）：一个坐标按另一个坐标线性偏移 —— x' = x + sxy·y、y' = syx·x + y。
+// @param sxy y 对 x 的贡献（"水平错切"量；只做水平错切就传 shear(a, 0.0f)，即讲义的 Hx(a)）
+// @param syx x 对 y 的贡献（"垂直错切"量）
+// @note 行列式 = 1 − sxy·syx：只沿一个方向错切时面积不变（det = 1）。
+inline Mat3 shear(float sxy, float syx) {
+    return Mat3{{1.0f, sxy,  0.0f},
+                {syx,  1.0f, 0.0f},
+                {0.0f, 0.0f, 1.0f}};
+}
+
+// ---- 逆变换（闭式）：直接给出原变换的逆，不走通用矩阵求逆 ----
+// @note 与通用逆 `Mat::inverse()` 的区别：闭式无需算行列式/伴随矩阵，语义明确、无精度损失；
+//       适合"已经知道是某种基元变换"的场景。
+
+// 平移的逆：T(t)⁻¹ = T(−t)
+inline Mat3 inverseTranslate(const Vec2& t) { return translate(-t); }
+
+// 旋转的逆：R(θ)⁻¹ = R(−θ)（正交矩阵，也等于转置 Rᵀ）
+inline Mat3 inverseRotate(float radians) { return rotate(-radians); }
+
+// 缩放的逆：S(sx, sy)⁻¹ = S(1/sx, 1/sy)
+// @return 任一分量为 0（不可逆）时返回 false，out 不变
+inline bool inverseScale(const Vec2& s, Mat3& out) {
+    if (s.x == 0.0f || s.y == 0.0f) return false;
+    out = scale(Vec2(1.0f / s.x, 1.0f / s.y));
+    return true;
+}
+
+// 错切的逆：H(sxy, syx)⁻¹ = 1/(1 − sxy·syx) · [[1, −sxy], [−syx, 1]]
+// @return det = 1 − sxy·syx 为 0（不可逆）时返回 false，out 不变
+inline bool inverseShear(float sxy, float syx, Mat3& out) {
+    const float det = 1.0f - sxy * syx;
+    if (det == 0.0f) return false;
+    const float inv = 1.0f / det;
+    out = Mat3{{ inv,       -sxy * inv, 0.0f},
+               {-syx * inv,  inv,       0.0f},
+               { 0.0f,       0.0f,      1.0f}};
+    return true;
+}
 
 } // namespace transform2d
 
@@ -180,6 +220,34 @@ inline Mat4 flipY() { return scale(Vec3(1.0f, -1.0f, 1.0f)); }
 // Z 轴镜像翻转（负 z）
 inline Mat4 flipZ() { return scale(Vec3(1.0f, 1.0f, -1.0f)); }
 
+// 欧拉角：R = Rx(alpha)·Ry(beta)·Rz(gamma)。
+// @param alpha 绕 X 轴（Roll 滚转）；@param beta 绕 Y 轴（Pitch 俯仰）；@param gamma 绕 Z 轴（Yaw 偏航）
+// @note **顺序敏感**（矩阵乘法不交换）。本函数固定上式书写顺序，对列向量意味着
+//       "先绕 Z 转 → 再绕 Y 转 → 最后绕 X 转"（矩阵从右往左作用）。
+// @note 各引擎/教材的顺序约定不同（XYZ / ZYX / Yaw-Pitch-Roll …）；本项目只提供这一种，写死于此。
+inline Mat4 euler(float alpha, float beta, float gamma) {
+    return rotate(alpha, Axis::X) * rotate(beta, Axis::Y) * rotate(gamma, Axis::Z);
+}
+
+// ---- 逆变换（闭式）：直接给出原变换的逆，不走通用矩阵求逆 ----
+
+// 平移的逆：T(t)⁻¹ = T(−t)
+inline Mat4 inverseTranslate(const Vec3& t) { return translate(-t); }
+
+// 绕坐标轴旋转的逆：R(θ, axis)⁻¹ = R(−θ, axis)
+inline Mat4 inverseRotate(float radians, Axis axis) { return rotate(-radians, axis); }
+
+// 绕任意轴旋转的逆：R(θ, axis)⁻¹ = R(−θ, axis)
+inline Mat4 inverseRotate(float radians, const Vec3& axis) { return rotate(-radians, axis); }
+
+// 缩放的逆：S(sx, sy, sz)⁻¹ = S(1/sx, 1/sy, 1/sz)
+// @return 任一分量为 0（不可逆）时返回 false，out 不变
+inline bool inverseScale(const Vec3& s, Mat4& out) {
+    if (s.x == 0.0f || s.y == 0.0f || s.z == 0.0f) return false;
+    out = scale(Vec3(1.0f / s.x, 1.0f / s.y, 1.0f / s.z));
+    return true;
+}
+
 
 
 
@@ -197,6 +265,18 @@ inline Mat4 basis(const Vec3& u, const Vec3& v, const Vec3& w) {
     return Mat4{{u.x, v.x, w.x, 0.0f},
                 {u.y, v.y, w.y, 0.0f},
                 {u.z, v.z, w.z, 0.0f},
+                {0.0f, 0.0f, 0.0f, 1.0f}};
+}
+
+// 坐标基（**带原点**）：F(u, v, w, o) —— 把"该坐标系下的坐标"映射到当前坐标系。
+// @param u/v/w 新坐标系的三根基向量（作为**列**）；@param o 新坐标系原点在当前坐标系中的位置
+// @note 即"模型空间 → 世界"的变换：线性部分取三轴、平移列取原点 o。
+//       相机→世界矩阵是它的特例：C = frame(相机右轴, 相机上轴, 相机后轴, 相机位置)。
+// @note 与 basis(u, v, w) 的关系：basis 只是它的**线性部分**（没有原点平移）。
+inline Mat4 frame(const Vec3& u, const Vec3& v, const Vec3& w, const Vec3& o) {
+    return Mat4{{u.x, v.x, w.x, o.x},
+                {u.y, v.y, w.y, o.y},
+                {u.z, v.z, w.z, o.z},
                 {0.0f, 0.0f, 0.0f, 1.0f}};
 }
 
@@ -246,6 +326,18 @@ inline Mat4 rotateViaBasis(float radians, const Vec3& axis) {
 //       同维方阵链的乘法顺序不影响标量乘次数（见 ADR-0004）。
 template <int N>
 class Transform {
+private:
+    // 折叠：steps_[k-1] * ... * steps_[0]（新步骤**左乘** ⇒ 后写的后作用）
+    Mat<N> fold() const {
+        Mat<N> acc = Mat<N>::identity();
+        for (const Mat<N>& s : steps_) acc = s * acc;
+        return acc;
+    }
+
+    std::vector<Mat<N>> steps_;
+    mutable Mat<N> cached_;       // matrix() 的折叠缓存
+    mutable bool valid_ = false;  // 缓存是否有效（then / operator* 之后失效）
+
 public:
     Transform() = default;
     Transform(const Mat<N>& m) { steps_.push_back(m); }
@@ -287,6 +379,19 @@ public:
     // 单点求值：内部即"**单矩阵 apply**"（1 次 mat-vec；折叠只在首次发生并被缓存）
     Vec<N> apply(const Vec<N>& p) const { return matrix() * p; }
 
+    // 向量求值（齐次 w = 0）：只作用线性部分，**忽略平移**（方向/位移不该被平移改变）。
+    // @note 与 apply(p)（点，w = 1）配对：点 + 向量 → 点；向量 + 向量 → 向量。
+    Vec<N - 1> applyVector(const Vec<N - 1>& v) const {
+        const Mat<N>& m = matrix();
+        Vec<N - 1> r;
+        for (int i = 0; i < N - 1; ++i) {
+            float acc = 0.0f;
+            for (int k = 0; k < N - 1; ++k) acc += m(i, k) * v[k];
+            r[i] = acc;
+        }
+        return r;
+    }
+
     // 批量求值：折叠矩阵 + 批量后端（连续布局可被 setBatchTransformBackend 换成 SIMD/GPU）
     // @param in/out  点缓冲首地址（可为同一块内存做原地变换）
     // @param strideBytes 相邻点间隔字节数（连续数组 = sizeof(Vec<N>) = 16）
@@ -316,18 +421,6 @@ public:
             }
         }
     }
-
-private:
-    // 折叠：steps_[k-1] * ... * steps_[0]（新步骤**左乘** ⇒ 后写的后作用）
-    Mat<N> fold() const {
-        Mat<N> acc = Mat<N>::identity();
-        for (const Mat<N>& s : steps_) acc = s * acc;
-        return acc;
-    }
-
-    std::vector<Mat<N>> steps_;
-    mutable Mat<N> cached_;       // matrix() 的折叠缓存
-    mutable bool valid_ = false;  // 缓存是否有效（then / operator* 之后失效）
 };
 
 } // namespace gfx::math

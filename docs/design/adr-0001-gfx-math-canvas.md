@@ -39,6 +39,6 @@
 
 ## 后果
 
-- src/ 公共 include 树开始出现：`include/gfx/math/*`、`include/gfx/canvas.hpp`（待实现落位）。
-- 版本事实源 `include/gfx/version.hpp` 本次创建（0.1.0）。
+- src/ 公共 include 树开始出现：`include/gfx/math/*`、`include/gfx/core/canvas.hpp`（待实现落位）。
+- 版本事实源 `include/gfx/core/version.hpp` 本次创建（0.1.0）。
 - 未决/后续：窗口管理粒度、像素格式约定（BGRA/RGBA）、present 是否拆 swapchain 概念——见 todo.md。

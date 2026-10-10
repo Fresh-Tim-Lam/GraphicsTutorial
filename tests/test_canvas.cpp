@@ -3,7 +3,7 @@
 // 运行：ctest --test-dir build -C Release -R test_canvas
 
 #include "gfx_test.hpp"
-#include <gfx/canvas.hpp>
+#include <gfx/core/canvas.hpp>
 
 using gfx::Canvas;
 using gfx::Color;
